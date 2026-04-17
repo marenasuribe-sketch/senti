@@ -1,0 +1,17 @@
+{
+  "terminal.integrated.defaultProfile.windows": "PowerShell",
+  "terminal.integrated.profiles.windows": {
+    "Claude Code": {
+      "path": "cmd.exe",
+      "args": ["/k", "cd /d C:\\Projects\\senti && claude"],
+      "icon": "robot"
+    },
+    "PowerShell": {
+      "source": "PowerShell",
+      "icon": "terminal-powershell"
+    }
+  },
+  "editor.formatOnSave": true,
+  "typescript.validate.enable": true,
+  "typescript.tsdk": "node_modules/typescript/lib"
+}

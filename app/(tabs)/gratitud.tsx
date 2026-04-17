@@ -6,9 +6,7 @@ import {
 import { Audio } from 'expo-av';
 import { supabase } from '../../lib/supabase';
 
-const USER_ID = 'usuario_prueba';
-
-type Gratitud = { id: string; texto: string; created_at: string };
+type Gratitud = { id: string; gratitud_1: string | null; gratitud_2: string | null; gratitud_3: string | null; created_at: string };
 type AudioField = 'momento' | 'persona' | 'victoria';
 
 function startOfWeek() {
@@ -61,9 +59,12 @@ export default function GratitudScreen() {
 
   async function cargar() {
     setCargando(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    if (!userId) { setCargando(false); return; }
     const { data } = await supabase
-      .from('gratitudes').select('id, texto, created_at')
-      .eq('user_id', USER_ID).order('created_at', { ascending: false }).limit(100);
+      .from('gratitudes').select('id, gratitud_1, gratitud_2, gratitud_3, created_at')
+      .eq('user_id', userId).order('created_at', { ascending: false }).limit(100);
     if (data) {
       setTodas(data); setRacha(calcularRacha(data));
       setSemana(data.filter(e => e.created_at >= startOfWeek()));
@@ -100,20 +101,34 @@ export default function GratitudScreen() {
   async function guardar() {
     if (!momento.trim() && !persona.trim() && !victoria.trim()) return;
     setGuardando(true);
-    const partes: string[] = [];
-    if (momento.trim())  partes.push(`Momento: ${momento.trim()}`);
-    if (persona.trim())  partes.push(`Persona: ${persona.trim()}`);
-    if (victoria.trim()) partes.push(`Victoria: ${victoria.trim()}`);
-    const texto = partes.join('\n');
+
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    if (!userId) { Alert.alert('Error', 'No hay sesión activa.'); setGuardando(false); return; }
+
     const { data, error } = await supabase.from('gratitudes')
-      .insert({ user_id: USER_ID, texto })
-      .select('id, texto, created_at').single();
+      .insert({
+        user_id:    userId,
+        gratitud_1: momento.trim() || null,
+        gratitud_2: persona.trim() || null,
+        gratitud_3: victoria.trim() || null,
+      })
+      .select('id, gratitud_1, gratitud_2, gratitud_3, created_at').single();
+
     if (error) { Alert.alert('Error', 'No se pudo guardar.'); }
     else if (data) {
       const updated = [data, ...todas];
       setTodas(updated); setRacha(calcularRacha(updated));
       setSemana(updated.filter(e => e.created_at >= startOfWeek()));
       setMomento(''); setPersona(''); setVictoria('');
+
+      // Sumar 2 gotas
+      const { data: planta } = await supabase
+        .from('plantas_usuario').select('gotas').eq('user_id', userId).single();
+      if (planta) {
+        await supabase.from('plantas_usuario')
+          .update({ gotas: planta.gotas + 2 }).eq('user_id', userId);
+      }
     }
     setGuardando(false);
   }

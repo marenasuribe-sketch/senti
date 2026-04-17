@@ -1,0 +1,7 @@
+[
+  {
+    "key": "ctrl+shift+a",
+    "command": "workbench.action.tasks.runTask",
+    "args": "🤖 Abrir Claude Code"
+  }
+]

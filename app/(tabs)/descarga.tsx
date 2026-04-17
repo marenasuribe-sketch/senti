@@ -6,8 +6,6 @@ import {
 import { Audio } from 'expo-av';
 import { supabase } from '../../lib/supabase';
 
-const USER_ID = 'usuario_prueba';
-
 type Tarea = { id: string; texto: string; tag: 'trabajo' | 'personal'; hecha: boolean };
 
 const STEP_TITLES = ['Liberar', 'Tus tareas de hoy', 'Tu foco del día'];
@@ -72,7 +70,24 @@ export default function DescargaScreen() {
   async function handleListo() {
     if (!guardado && texto.trim()) {
       setGuardando(true);
-      await supabase.from('journal').insert({ user_id: USER_ID, texto: texto.trim() });
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (!userId) { Alert.alert('Error', 'No hay sesión activa.'); setGuardando(false); return; }
+
+      await supabase.from('journal').insert({
+        user_id: userId,
+        content: texto.trim(),
+      });
+
+      // Sumar 2 gotas
+      const { data: planta } = await supabase
+        .from('plantas_usuario').select('gotas').eq('user_id', userId).single();
+      if (planta) {
+        await supabase.from('plantas_usuario')
+          .update({ gotas: planta.gotas + 2 }).eq('user_id', userId);
+      }
+
       setGuardado(true); setGuardando(false);
     }
     setStep(1);

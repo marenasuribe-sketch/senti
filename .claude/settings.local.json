@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls C:/Projects/senti/*.js)",
+      "Bash(npx expo:*)",
+      "Bash(kill %1)",
+      "Bash(wait)",
+      "Bash(CI=1 npx expo start --port 8082)",
+      "Bash(npm install:*)",
+      "Bash(CI=1 timeout 12 npx expo start)",
+      "Bash(grep -v \"^$\")",
+      "Bash(npx kill-port:*)",
+      "Bash(taskkill /F /IM node.exe /T)",
+      "Bash(CI=1 timeout 15 npx expo start)",
+      "Bash(CI=1 timeout 20 npx expo start)",
+      "Bash(ipconfig)",
+      "Bash(powershell.exe:*)",
+      "Bash(curl:*)",
+      "Bash(ls:*)",
+      "Bash(node:*)"
+    ]
+  }
+}

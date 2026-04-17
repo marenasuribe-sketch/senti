@@ -115,12 +115,38 @@ export default function JournalScreen() {
     setLoading(true); setResult(null);
     try {
       const analysis = await analyzeWithClaude(text);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (!userId) { Alert.alert('Error', 'No hay sesión activa.'); return; }
+
+      const stress  = analysis.emociones.find(e => e.label === 'Estrés')?.valor  ?? 0;
+      const calm    = analysis.emociones.find(e => e.label === 'Calma')?.valor   ?? 0;
+      const energy  = analysis.emociones.find(e => e.label === 'Energía')?.valor ?? 0;
+
       await supabase.from('journal').insert({
-        content: text,
-        consejo: analysis.consejo,
-        emocion: analysis.emociones[0]?.label ?? '',
-        created_at: new Date().toISOString(),
+        user_id:       userId,
+        content:       text,
+        emotions:      analysis.emociones.map(e => e.label),
+        stress_level:  stress,
+        calm_level:    calm,
+        energy_level:  energy,
+        closing_phrase: analysis.consejo,
       });
+
+      // Sumar 3 gotas
+      const { data: planta } = await supabase
+        .from('plantas_usuario')
+        .select('gotas')
+        .eq('user_id', userId)
+        .single();
+      if (planta) {
+        await supabase
+          .from('plantas_usuario')
+          .update({ gotas: planta.gotas + 3 })
+          .eq('user_id', userId);
+      }
+
       setResult(analysis);
     } catch { Alert.alert('Algo salió mal', 'Intenta de nuevo.'); }
     finally { setLoading(false); }
