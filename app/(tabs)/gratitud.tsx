@@ -6,7 +6,7 @@ import {
 import { Audio } from 'expo-av';
 import { supabase } from '../../lib/supabase';
 
-type Gratitud = { id: string; gratitud_1: string | null; gratitud_2: string | null; gratitud_3: string | null; created_at: string };
+type Gratitud = { id: string; texto: string; created_at: string };
 type AudioField = 'momento' | 'persona' | 'victoria';
 
 function startOfWeek() {
@@ -63,7 +63,7 @@ export default function GratitudScreen() {
     const userId = session?.user?.id;
     if (!userId) { setCargando(false); return; }
     const { data } = await supabase
-      .from('gratitudes').select('id, gratitud_1, gratitud_2, gratitud_3, created_at')
+      .from('gratitudes').select('*')
       .eq('user_id', userId).order('created_at', { ascending: false }).limit(100);
     if (data) {
       setTodas(data); setRacha(calcularRacha(data));
@@ -106,16 +106,17 @@ export default function GratitudScreen() {
     const userId = session?.user?.id;
     if (!userId) { Alert.alert('Error', 'No hay sesión activa.'); setGuardando(false); return; }
 
-    const { data, error } = await supabase.from('gratitudes')
-      .insert({
-        user_id:    userId,
-        gratitud_1: momento.trim() || null,
-        gratitud_2: persona.trim() || null,
-        gratitud_3: victoria.trim() || null,
-      })
-      .select('id, gratitud_1, gratitud_2, gratitud_3, created_at').single();
+    const partes: string[] = [];
+    if (momento.trim())  partes.push(`Momento: ${momento.trim()}`);
+    if (persona.trim())  partes.push(`Persona: ${persona.trim()}`);
+    if (victoria.trim()) partes.push(`Victoria: ${victoria.trim()}`);
+    const textoGuardar = partes.join('\n');
 
-    if (error) { Alert.alert('Error', 'No se pudo guardar.'); }
+    const { data, error } = await supabase.from('gratitudes')
+      .insert({ user_id: userId, texto: textoGuardar })
+      .select('*').single();
+
+    if (error) { Alert.alert('Error', error.message); }
     else if (data) {
       const updated = [data, ...todas];
       setTodas(updated); setRacha(calcularRacha(updated));
@@ -124,10 +125,10 @@ export default function GratitudScreen() {
 
       // Sumar 2 gotas
       const { data: planta } = await supabase
-        .from('plantas_usuario').select('gotas').eq('user_id', userId).single();
+        .from('plantas_usuario').select('puntos').eq('user_id', userId).single();
       if (planta) {
         await supabase.from('plantas_usuario')
-          .update({ gotas: planta.gotas + 2 }).eq('user_id', userId);
+          .update({ puntos: planta.puntos + 2 }).eq('user_id', userId);
       }
     }
     setGuardando(false);

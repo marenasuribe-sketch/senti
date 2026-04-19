@@ -75,7 +75,7 @@ export default function RootLayout() {
       router.replace('/onboarding');
     } else if (appState === 'onboarding' && !inOnboarding) {
       router.replace('/onboarding/intake');
-    } else if (appState === 'ready' && !inTabs) {
+    } else if (appState === 'ready' && !inTabs && !inOnboarding) {
       router.replace('/(tabs)');
     }
   }, [appState, fontsLoaded, navState?.key, segments]);

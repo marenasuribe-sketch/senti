@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
   StyleSheet, ActivityIndicator, Modal,
 } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 
 const GOTAS_POR_ETAPA = 5;
@@ -52,29 +53,33 @@ function greetingLabel() {
 }
 
 export default function HomeScreen() {
+  const router = useRouter();
   const [userId, setUserId]       = useState<string | null>(null);
   const [plantaId, setPlantaId]   = useState<string | null>(null);
   const [gotas, setGotas]         = useState(0);
   const [cargando, setCargando]   = useState(true);
   const [celebrando, setCelebrando] = useState(false);
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) { setCargando(false); return; }
-      const uid = session.user.id;
-      setUserId(uid);
-      supabase
-        .from('plantas_usuario')
-        .select('planta_id, gotas')
-        .eq('user_id', uid)
-        .maybeSingle()
-        .then(({ data }) => {
-          if (data?.planta_id) setPlantaId(data.planta_id);
-          if (data?.gotas)     setGotas(data.gotas);
-        })
-        .finally(() => setCargando(false));
-    });
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      setCargando(true);
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!session) { setCargando(false); return; }
+        const uid = session.user.id;
+        setUserId(uid);
+        supabase
+          .from('plantas_usuario')
+          .select('nombre, puntos, nivel')
+          .eq('user_id', uid)
+          .maybeSingle()
+          .then(({ data }) => {
+            if (data?.nombre) setPlantaId(data.nombre);
+            if (data?.puntos != null) setGotas(data.puntos);
+          })
+          .finally(() => setCargando(false));
+      });
+    }, [])
+  );
 
   async function regar() {
     if (!userId) return;
@@ -82,7 +87,7 @@ export default function HomeScreen() {
     setGotas(nuevas);
     if (nuevas % GOTAS_POR_ETAPA === 0) setCelebrando(true);
     supabase.from('plantas_usuario')
-      .update({ gotas: nuevas })
+      .update({ puntos: nuevas })
       .eq('user_id', userId);
   }
 
@@ -100,8 +105,23 @@ export default function HomeScreen() {
 
   if (!planta) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#fbf9f4', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator color="#3d6841" />
+      <View style={{ flex: 1, backgroundColor: '#fbf9f4', justifyContent: 'center', alignItems: 'center', padding: 32 }}>
+        <Text style={{ fontSize: 72, marginBottom: 16 }}>🌱</Text>
+        <Text style={{ fontFamily: 'PlusJakartaSans_700Bold', fontSize: 22, color: '#31332c', textAlign: 'center', marginBottom: 8 }}>
+          Todavía no tienes una planta
+        </Text>
+        <Text style={{ fontFamily: 'Manrope_400Regular', fontSize: 14, color: '#5e6058', textAlign: 'center', lineHeight: 22, marginBottom: 32 }}>
+          Elige tu compañera de bienestar para empezar a cuidarla.
+        </Text>
+        <TouchableOpacity
+          style={{ backgroundColor: '#3d6841', borderRadius: 9999, paddingVertical: 16, paddingHorizontal: 32 }}
+          onPress={() => router.push('/onboarding/planta')}
+          activeOpacity={0.85}
+        >
+          <Text style={{ fontFamily: 'PlusJakartaSans_700Bold', fontSize: 16, color: '#e4ffe0' }}>
+            Elegir mi planta 🌿
+          </Text>
+        </TouchableOpacity>
       </View>
     );
   }

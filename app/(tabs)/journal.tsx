@@ -66,9 +66,15 @@ Para accionTipos: warm=situación difícil/estrés, mist=estado mental/emocional
       messages: [{ role: 'user', content: text }],
     }),
   });
-  if (!res.ok) throw new Error('Error con Claude');
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Claude ${res.status}: ${errText}`);
+  }
   const data = await res.json();
-  return JSON.parse(data.content[0].text.trim()) as AnalysisResult;
+  const raw = data.content[0].text.trim();
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('Respuesta inválida de Claude');
+  return JSON.parse(match[0]) as AnalysisResult;
 }
 
 const PILL_STYLES: Record<PillTipo, { bg: string; color: string }> = {
@@ -125,30 +131,25 @@ export default function JournalScreen() {
       const energy  = analysis.emociones.find(e => e.label === 'Energía')?.valor ?? 0;
 
       await supabase.from('journal').insert({
-        user_id:       userId,
-        content:       text,
-        emotions:      analysis.emociones.map(e => e.label),
-        stress_level:  stress,
-        calm_level:    calm,
-        energy_level:  energy,
-        closing_phrase: analysis.consejo,
+        user_id: userId,
+        texto:   text,
       });
 
-      // Sumar 3 gotas
+      // Sumar 3 puntos
       const { data: planta } = await supabase
         .from('plantas_usuario')
-        .select('gotas')
+        .select('puntos')
         .eq('user_id', userId)
         .single();
       if (planta) {
         await supabase
           .from('plantas_usuario')
-          .update({ gotas: planta.gotas + 3 })
+          .update({ puntos: planta.puntos + 3 })
           .eq('user_id', userId);
       }
 
       setResult(analysis);
-    } catch { Alert.alert('Algo salió mal', 'Intenta de nuevo.'); }
+    } catch (e: any) { Alert.alert('Algo salió mal', e?.message ?? String(e)); }
     finally { setLoading(false); }
   }
 

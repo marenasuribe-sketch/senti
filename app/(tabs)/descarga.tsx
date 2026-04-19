@@ -32,7 +32,7 @@ async function transcribeAudio(uri: string): Promise<string> {
 
 export default function DescargaScreen() {
   const [step, setStep]         = useState(0);
-  const [texto, setTexto]       = useState('');
+  const [texto, settexto]       = useState('');
   const [guardando, setGuardando] = useState(false);
   const [guardado, setGuardado] = useState(false);
   const [tareas, setTareas]     = useState<Tarea[]>(TAREAS_INIT);
@@ -62,7 +62,7 @@ export default function DescargaScreen() {
       const uri = recording.getURI(); setRecording(null);
       if (!uri) throw new Error('Sin audio');
       const t = await transcribeAudio(uri);
-      setTexto(prev => prev.trim() ? `${prev.trim()}\n${t}` : t);
+      settexto(prev => prev.trim() ? `${prev.trim()}\n${t}` : t);
     } catch { Alert.alert('Error al transcribir', 'Intenta de nuevo.'); }
     finally { setTranscribing(false); }
   }
@@ -77,15 +77,15 @@ export default function DescargaScreen() {
 
       await supabase.from('journal').insert({
         user_id: userId,
-        content: texto.trim(),
+        texto: texto.trim(),
       });
 
-      // Sumar 2 gotas
+      // Sumar 2 puntos
       const { data: planta } = await supabase
-        .from('plantas_usuario').select('gotas').eq('user_id', userId).single();
+        .from('plantas_usuario').select('puntos').eq('user_id', userId).single();
       if (planta) {
         await supabase.from('plantas_usuario')
-          .update({ gotas: planta.gotas + 2 }).eq('user_id', userId);
+          .update({ puntos: planta.puntos + 2 }).eq('user_id', userId);
       }
 
       setGuardado(true); setGuardando(false);
@@ -137,7 +137,7 @@ export default function DescargaScreen() {
               <TextInput
                 style={[S.input, S.inputFlex]}
                 value={texto}
-                onChangeText={setTexto}
+                onChangeText={settexto}
                 placeholder="Estoy pensando en..."
                 placeholderTextColor="#A09890"
                 multiline
@@ -234,7 +234,7 @@ export default function DescargaScreen() {
 
             <TouchableOpacity
               style={S.btnReset}
-              onPress={() => { setStep(0); setGuardado(false); setTexto(''); }}
+              onPress={() => { setStep(0); setGuardado(false); settexto(''); }}
               activeOpacity={0.8}
             >
               <Text style={S.btnResetText}>Nueva descarga</Text>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
-  StyleSheet, ActivityIndicator, SafeAreaView,
+  StyleSheet, ActivityIndicator, SafeAreaView, Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -52,12 +52,22 @@ export default function PlantaOnboardingScreen() {
     setGuardando(true);
 
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { setGuardando(false); return; }
+    if (!session) {
+      Alert.alert('Error', 'No hay sesión activa. Volvé a iniciar sesión.');
+      setGuardando(false);
+      return;
+    }
 
-    await supabase.from('plantas_usuario').upsert(
-      { user_id: session.user.id, planta_id: selectedId, gotas: 0 },
+    const { error } = await supabase.from('plantas_usuario').upsert(
+      { user_id: session.user.id, nombre: selectedId, puntos: 0, nivel: 1 },
       { onConflict: 'user_id' },
     );
+
+    if (error) {
+      Alert.alert('Error al guardar', error.message);
+      setGuardando(false);
+      return;
+    }
 
     await AsyncStorage.setItem('onboarding_complete', 'true');
     setGuardando(false);
