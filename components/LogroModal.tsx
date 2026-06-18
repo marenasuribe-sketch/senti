@@ -25,11 +25,8 @@ export default function LogroModal({ logro, onClose }: Props) {
 
           {/* Ícono contextual */}
           <View style={S.iconoWrap}>
-            <Ionicons name={logro.icono as any} size={28} color="#1e4824" />
+            <Ionicons name={logro.icono as any} size={20} color="#1e4824" />
           </View>
-
-          {/* Categoría — label pequeño */}
-          <Text style={S.categoria}>{labelCategoria(logro.categoria)}</Text>
 
           {/* Nombre del logro */}
           <Text style={S.nombre}>{logro.nombre}</Text>
@@ -48,85 +45,65 @@ export default function LogroModal({ logro, onClose }: Props) {
   );
 }
 
-function labelCategoria(cat: Logro['categoria']): string {
-  const labels: Record<Logro['categoria'], string> = {
-    inicio:     'PRIMER PASO',
-    sentir:     'PERMITIRTE SENTIR',
-    constancia: 'CONSTANCIA AMABLE',
-    soltar:     'SOLTAR Y AGRADECER',
-    voz:        'TU VOZ',
-    planta:     'TU PLANTA',
-  };
-  return labels[cat];
-}
-
 const S = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(30, 33, 27, 0.78)',
+    backgroundColor: 'rgba(30, 33, 27, 0.45)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 28,
+    paddingHorizontal: 52,
   },
   card: {
     backgroundColor: '#bfefbd',
-    borderRadius: 32,
-    paddingVertical: 40,
-    paddingHorizontal: 32,
+    borderRadius: 24,
+    paddingVertical: 24,
+    paddingHorizontal: 24,
     width: '100%',
     alignItems: 'center',
     gap: 0,
-    shadowColor: 'rgba(30, 72, 36, 1)',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.18,
-    shadowRadius: 32,
-    elevation: 12,
+    shadowColor: 'rgba(20, 50, 24, 1)',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.42,
+    shadowRadius: 40,
+    elevation: 18,
   },
   iconoWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: 'rgba(61, 104, 65, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
-  },
-  categoria: {
-    fontFamily: 'Manrope_700Bold',
-    fontSize: 10,
-    color: '#3d6841',
-    letterSpacing: 2,
-    textAlign: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   nombre: {
     fontFamily: 'PlusJakartaSans_800ExtraBold',
-    fontSize: 28,
+    fontSize: 20,
     color: '#1e4824',
     textAlign: 'center',
-    letterSpacing: -0.6,
-    lineHeight: 34,
-    marginBottom: 16,
+    letterSpacing: -0.4,
+    lineHeight: 24,
+    marginBottom: 9,
   },
   mensaje: {
     fontFamily: 'Manrope_400Regular',
-    fontSize: 16,
+    fontSize: 13,
     color: '#2d5430',
     textAlign: 'center',
-    lineHeight: 25,
+    lineHeight: 19,
     fontStyle: 'italic',
     paddingHorizontal: 4,
-    marginBottom: 32,
+    marginBottom: 18,
   },
   btn: {
     backgroundColor: '#3d6841',
     borderRadius: 9999,
-    paddingVertical: 15,
-    paddingHorizontal: 48,
+    paddingVertical: 11,
+    paddingHorizontal: 34,
   },
   btnText: {
     fontFamily: 'PlusJakartaSans_700Bold',
-    fontSize: 15,
+    fontSize: 13,
     color: '#e4ffe0',
     letterSpacing: 0.3,
   },
