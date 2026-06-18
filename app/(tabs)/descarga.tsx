@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAudioRecorder, AudioModule, RecordingPresets } from 'expo-audio';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
+import { transcribirAudio } from '../../lib/edge';
 import { sumarGotas } from '../../lib/planta';
 import { LIMITES_TEXTO, superaLimite } from '../../lib/validation';
 import { verificarLogros, type Logro } from '../../lib/logros';
@@ -23,29 +24,6 @@ const TAGS: Array<{ id: string; label: string }> = [
   { id: 'tarea',     label: 'Tarea pendiente' },
   { id: 'otro',      label: 'Otro' },
 ];
-
-async function transcribeAudio(uri: string, accessToken: string): Promise<string> {
-  const ext = uri.split('.').pop()?.toLowerCase() ?? 'm4a';
-  const mimeMap: Record<string, string> = {
-    'm4a': 'audio/m4a', 'mp4': 'audio/mp4',
-    'wav': 'audio/wav', 'caf': 'audio/x-caf', '3gp': 'audio/3gpp',
-  };
-  const mime = mimeMap[ext] ?? 'audio/m4a';
-  const formData = new FormData();
-  formData.append('file', { uri, name: `audio.${ext}`, type: mime } as any);
-
-  const { data, error } = await supabase.functions.invoke('transcribir-audio', {
-    body: formData,
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  if (error) throw new Error(error.message ?? 'Error al transcribir');
-  if (data?.error) {
-    if (data.error === 'LIMITE_AUDIO_GRATIS') throw new Error('LIMITE_AUDIO_GRATIS');
-    if (data.error === 'LIMITE_AUDIO_PREMIUM') throw new Error('LIMITE_AUDIO_PREMIUM');
-    throw new Error(data.error);
-  }
-  return data.texto as string;
-}
 
 export default function DescargaScreen() {
   const router = useRouter();
@@ -86,7 +64,7 @@ export default function DescargaScreen() {
       if (!uri) throw new Error('Sin audio');
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Sin sesión activa');
-      const t = await transcribeAudio(uri, session.access_token);
+      const t = await transcribirAudio(uri, session.access_token);
       setTexto(prev => prev.trim() ? `${prev.trim()}\n${t}` : t);
       setUsedAudio(true);
     } catch (e: any) {

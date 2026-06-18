@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAudioRecorder, AudioModule, RecordingPresets } from 'expo-audio';
 import { supabase } from '../../lib/supabase';
+import { transcribirAudio } from '../../lib/edge';
 import { sumarGotas } from '../../lib/planta';
 import { LIMITES_TEXTO } from '../../lib/validation';
 import { verificarLogros, type Logro } from '../../lib/logros';
@@ -84,16 +85,8 @@ export default function JournalScreen() {
         if (!uri) throw new Error('Sin audio');
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('Sin sesión');
-        const ext = uri.split('.').pop()?.toLowerCase() ?? 'm4a';
-        const mimeMap: Record<string, string> = { m4a: 'audio/m4a', mp4: 'audio/mp4', wav: 'audio/wav', caf: 'audio/x-caf' };
-        const formData = new FormData();
-        formData.append('file', { uri, name: `audio.${ext}`, type: mimeMap[ext] ?? 'audio/m4a' } as any);
-        const { data, error } = await supabase.functions.invoke('transcribir-audio', {
-          body: formData,
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
-        if (error || data?.error) throw new Error(data?.error ?? error?.message);
-        setText(prev => prev.trim() ? `${prev.trim()}\n${data.texto}` : data.texto);
+        const t = await transcribirAudio(uri, session.access_token);
+        setText(prev => prev.trim() ? `${prev.trim()}\n${t}` : t);
       } catch (e: any) {
         const msg = e?.message ?? String(e);
         if (msg === 'LIMITE_AUDIO_GRATIS') Alert.alert('Límite de audio', 'Ya usaste tu audio de hoy.');
