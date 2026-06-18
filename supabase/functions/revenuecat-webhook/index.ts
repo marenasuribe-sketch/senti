@@ -26,13 +26,17 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
   try {
-    // Validar el webhook secret de RevenueCat (configúralo en RevenueCat dashboard)
+    // Validar el webhook secret de RevenueCat (configúralo en RevenueCat dashboard).
+    // Falla cerrado: si el secret no está configurado, se rechaza todo —
+    // así nadie puede activarse Senti+ con un POST si olvidamos configurarlo.
     const webhookSecret = Deno.env.get('REVENUECAT_WEBHOOK_SECRET');
-    if (webhookSecret) {
-      const authHeader = req.headers.get('Authorization') ?? '';
-      if (authHeader !== `Bearer ${webhookSecret}`) {
-        return json({ error: 'Unauthorized' }, 401);
-      }
+    if (!webhookSecret) {
+      console.error('REVENUECAT_WEBHOOK_SECRET no configurado — rechazando webhook');
+      return json({ error: 'Servidor mal configurado' }, 500);
+    }
+    const authHeader = req.headers.get('Authorization') ?? '';
+    if (authHeader !== `Bearer ${webhookSecret}`) {
+      return json({ error: 'Unauthorized' }, 401);
     }
 
     const body = await req.json();
