@@ -15,17 +15,19 @@ import {
   Manrope_700Bold,
 } from '@expo-google-fonts/manrope';
 import { supabase } from '../lib/supabase';
+import { inicializarRevenueCat } from '../lib/revenuecat';
 
 SplashScreen.preventAutoHideAsync();
 
-type AppState = 'loading' | 'no-session' | 'onboarding' | 'ready';
-
 export default function RootLayout() {
-  const router      = useRouter();
-  const segments    = useSegments();
-  const navState    = useRootNavigationState();   // ← clave: saber cuándo el nav está listo
+  const router    = useRouter();
+  const segments  = useSegments();
+  const navState  = useRootNavigationState();   // ← clave: saber cuándo el nav está listo
 
-  const [appState, setAppState] = useState<AppState>('loading');
+  const [ready, setReady] = useState(false);
+  // Signal para forzar re-check cuando cambia el estado de auth
+  // (login, logout) — incrementarlo dispara el useEffect de navegación.
+  const [authSignal, setAuthSignal] = useState(0);
 
   const [fontsLoaded] = useFonts({
     PlusJakartaSans_700Bold,
@@ -36,58 +38,74 @@ export default function RootLayout() {
     Manrope_700Bold,
   });
 
-  /* ── Determinar estado inicial ── */
+  /* ── Escuchar cambios de auth (login / logout) ── */
   useEffect(() => {
-    async function init() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        setAppState('no-session');
-        return;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setAuthSignal(s => s + 1);
+      if (session?.user?.id) {
+        inicializarRevenueCat(session.user.id).catch(() => {});
       }
-      const completed = await AsyncStorage.getItem('onboarding_complete');
-      setAppState(completed === 'true' ? 'ready' : 'onboarding');
-    }
-
-    init();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (!session) {
-        setAppState('no-session');
-        return;
-      }
-      const completed = await AsyncStorage.getItem('onboarding_complete');
-      setAppState(completed === 'true' ? 'ready' : 'onboarding');
     });
-
     return () => subscription.unsubscribe();
   }, []);
 
-  /* ── Redirigir cuando el nav esté listo + estado resuelto ── */
+  /* ── Decidir adónde navegar ──
+   * Re-lee sesión y AsyncStorage en cada cambio de segmentos / auth.
+   * No cachea — así detecta inmediatamente cuando se completa el onboarding.
+   */
   useEffect(() => {
     if (!navState?.key) return;          // navegador aún no montado
     if (!fontsLoaded) return;
-    if (appState === 'loading') return;
 
-    const inOnboarding = segments[0] === 'onboarding';
-    const inTabs       = segments[0] === '(tabs)';
+    let cancelled = false;
+    async function check() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (cancelled) return;
 
-    if (appState === 'no-session' && !inOnboarding) {
-      router.replace('/onboarding');
-    } else if (appState === 'onboarding' && !inOnboarding) {
-      router.replace('/onboarding/intake');
-    } else if (appState === 'ready' && !inTabs && !inOnboarding) {
-      router.replace('/(tabs)');
+      const inOnboarding = segments[0] === 'onboarding';
+
+      if (!session) {
+        // Sin sesión → siempre a welcome (onboarding root)
+        if (!inOnboarding || segments[1]) {
+          router.replace('/onboarding');
+        }
+        setReady(true);
+        return;
+      }
+
+      // Con sesión → chequear si completó onboarding
+      const completed = await AsyncStorage.getItem('onboarding_complete');
+      if (cancelled) return;
+
+      if (completed === 'true') {
+        // Onboarding completo → solo redirigir si está atascada en onboarding.
+        // Permitimos cualquier otra ruta autenticada (tabs, historial-gratitud,
+        // futuras pantallas como /ajustes, /capsula-mensual, etc.)
+        if (inOnboarding) router.replace('/(tabs)');
+      } else {
+        // Sesión activa pero falta onboarding
+        if (!inOnboarding) {
+          router.replace('/onboarding/intake');
+        } else if (!segments[1]) {
+          // Está en welcome con sesión activa → saltar a intake
+          router.replace('/onboarding/intake');
+        }
+        // Si ya está en intake o planta, dejarlo terminar el flow
+      }
+      setReady(true);
     }
-  }, [appState, fontsLoaded, navState?.key, segments]);
+    check();
+    return () => { cancelled = true; };
+  }, [fontsLoaded, navState?.key, segments, authSignal]);
 
   /* ── Ocultar splash ── */
   useEffect(() => {
-    if (fontsLoaded && appState !== 'loading') {
+    if (fontsLoaded && ready) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, appState]);
+  }, [fontsLoaded, ready]);
 
-  if (!fontsLoaded || appState === 'loading') {
+  if (!fontsLoaded || !ready) {
     return (
       <View style={{ flex: 1, backgroundColor: '#fbf9f4', justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator color="#3d6841" />

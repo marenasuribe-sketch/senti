@@ -1,305 +1,374 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  ActivityIndicator, StyleSheet, Alert,
+  ActivityIndicator, StyleSheet, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { Audio } from 'expo-av';
+import { Ionicons } from '@expo/vector-icons';
+import { useAudioRecorder, AudioModule, RecordingPresets } from 'expo-audio';
+import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
+import { sumarGotas } from '../../lib/planta';
+import { LIMITES_TEXTO, superaLimite } from '../../lib/validation';
+import { verificarLogros, type Logro } from '../../lib/logros';
+import CelebracionEtapa from '../../components/CelebracionEtapa';
+import LogroModal from '../../components/LogroModal';
+import SentiLogo from '../../components/SentiLogo';
 
-type Tarea = { id: string; texto: string; tag: 'trabajo' | 'personal'; hecha: boolean };
-
-const STEP_TITLES = ['Liberar', 'Tus tareas de hoy', 'Tu foco del día'];
-
-const TAREAS_INIT: Tarea[] = [
-  { id: '1', texto: 'Revisar emails pendientes',    tag: 'trabajo',  hecha: false },
-  { id: '2', texto: 'Preparar presentación',         tag: 'trabajo',  hecha: false },
-  { id: '3', texto: 'Llamar al médico',              tag: 'personal', hecha: false },
-  { id: '4', texto: 'Ir al gimnasio',                tag: 'personal', hecha: false },
+const TAGS: Array<{ id: string; label: string }> = [
+  { id: 'enojo',     label: 'Enojo' },
+  { id: 'rumiacion', label: 'Rumiación' },
+  { id: 'verguenza', label: 'Vergüenza' },
+  { id: 'miedo',     label: 'Miedo' },
+  { id: 'tristeza',  label: 'Tristeza' },
+  { id: 'tarea',     label: 'Tarea pendiente' },
+  { id: 'otro',      label: 'Otro' },
 ];
 
-async function transcribeAudio(uri: string): Promise<string> {
-  const OPENAI_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY!;
+async function transcribeAudio(uri: string, accessToken: string): Promise<string> {
+  const ext = uri.split('.').pop()?.toLowerCase() ?? 'm4a';
+  const mimeMap: Record<string, string> = {
+    'm4a': 'audio/m4a', 'mp4': 'audio/mp4',
+    'wav': 'audio/wav', 'caf': 'audio/x-caf', '3gp': 'audio/3gpp',
+  };
+  const mime = mimeMap[ext] ?? 'audio/m4a';
   const formData = new FormData();
-  formData.append('file', { uri, name: 'audio.m4a', type: 'audio/m4a' } as any);
-  formData.append('model', 'whisper-1');
-  formData.append('language', 'es');
-  const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-    method: 'POST', headers: { Authorization: `Bearer ${OPENAI_KEY}` }, body: formData,
+  formData.append('file', { uri, name: `audio.${ext}`, type: mime } as any);
+
+  const { data, error } = await supabase.functions.invoke('transcribir-audio', {
+    body: formData,
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (!res.ok) throw new Error('Error transcribiendo');
-  return (await res.json()).text as string;
+  if (error) throw new Error(error.message ?? 'Error al transcribir');
+  if (data?.error) {
+    if (data.error === 'LIMITE_AUDIO_GRATIS') throw new Error('LIMITE_AUDIO_GRATIS');
+    if (data.error === 'LIMITE_AUDIO_PREMIUM') throw new Error('LIMITE_AUDIO_PREMIUM');
+    throw new Error(data.error);
+  }
+  return data.texto as string;
 }
 
 export default function DescargaScreen() {
-  const [step, setStep]         = useState(0);
-  const [texto, settexto]       = useState('');
-  const [guardando, setGuardando] = useState(false);
-  const [guardado, setGuardado] = useState(false);
-  const [tareas, setTareas]     = useState<Tarea[]>(TAREAS_INIT);
-  const [nuevaTarea, setNuevaTarea] = useState('');
-  const [recording, setRecording]   = useState<Audio.Recording | null>(null);
-  const [transcribing, setTranscribing] = useState(false);
+  const router = useRouter();
+  const [texto, setTexto]             = useState('');
+  const [tagsSel, setTagsSel]         = useState<string[]>([]);
+  const [guardando, setGuardando]     = useState(false);
+  const [guardado, setGuardado]       = useState(false);
 
-  const isRecording = !!recording;
-  const tareasIncompletas = tareas.filter(t => !t.hecha);
-  const tareasFoco = tareasIncompletas.slice(0, 2);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const [isRecording, setIsRecording]   = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [usedAudio, setUsedAudio]       = useState(false);
+  const [celebracion, setCelebracion]   = useState<{ etapa: number; plantaId: string | null } | null>(null);
+  const [logros, setLogros]             = useState<Logro[]>([]);
+  const [logroIdx, setLogroIdx]         = useState(0);
+
+  function toggleTag(id: string) {
+    setTagsSel(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]);
+  }
 
   async function startRecording() {
     try {
-      const { granted } = await Audio.requestPermissionsAsync();
+      const { granted } = await AudioModule.requestRecordingPermissionsAsync();
       if (!granted) { Alert.alert('Permiso denegado', 'Senti necesita acceso al micrófono.'); return; }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      setRecording(recording);
-    } catch { Alert.alert('Error', 'No se pudo iniciar la grabación.'); }
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+      setIsRecording(true);
+    } catch (e) { Alert.alert('Error', 'No se pudo iniciar la grabación: ' + String(e)); }
   }
 
   async function stopRecording() {
-    if (!recording) return;
+    if (!isRecording) return;
     try {
       setTranscribing(true);
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI(); setRecording(null);
+      await recorder.stop();
+      const uri = recorder.uri;
+      setIsRecording(false);
       if (!uri) throw new Error('Sin audio');
-      const t = await transcribeAudio(uri);
-      settexto(prev => prev.trim() ? `${prev.trim()}\n${t}` : t);
-    } catch { Alert.alert('Error al transcribir', 'Intenta de nuevo.'); }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sin sesión activa');
+      const t = await transcribeAudio(uri, session.access_token);
+      setTexto(prev => prev.trim() ? `${prev.trim()}\n${t}` : t);
+      setUsedAudio(true);
+    } catch (e: any) {
+      const msg = e?.message ?? String(e);
+      if (msg === 'LIMITE_AUDIO_GRATIS') {
+        Alert.alert('Ya usaste tu audio de hoy', 'En el plan gratuito tienes 1 audio al día. Vuelve mañana o escribe directamente.',
+          [{ text: 'Entendido', style: 'cancel' }, { text: 'Ver Senti+', onPress: () => router.push('/upgrade') }]);
+      } else if (msg === 'LIMITE_AUDIO_PREMIUM') {
+        Alert.alert('Límite del día', 'Ya usaste tus 10 audios de hoy. Vuelven mañana.');
+      } else {
+        Alert.alert('Error al transcribir', msg);
+      }
+    }
     finally { setTranscribing(false); }
   }
 
-  async function handleListo() {
-    if (!guardado && texto.trim()) {
-      setGuardando(true);
-
-      const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id;
-      if (!userId) { Alert.alert('Error', 'No hay sesión activa.'); setGuardando(false); return; }
-
-      await supabase.from('journal').insert({
-        user_id: userId,
-        texto: texto.trim(),
-      });
-
-      // Sumar 2 puntos
-      const { data: planta } = await supabase
-        .from('plantas_usuario').select('puntos').eq('user_id', userId).single();
-      if (planta) {
-        await supabase.from('plantas_usuario')
-          .update({ puntos: planta.puntos + 2 }).eq('user_id', userId);
-      }
-
-      setGuardado(true); setGuardando(false);
+  async function soltar() {
+    if (!texto.trim()) return;
+    if (superaLimite(texto, 'descarga')) {
+      Alert.alert('Texto demasiado largo', `Máximo ${LIMITES_TEXTO.descarga} caracteres.`);
+      return;
     }
-    setStep(1);
+    setGuardando(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    if (!userId) { Alert.alert('Error', 'No hay sesión activa.'); setGuardando(false); return; }
+
+    const tagsLine = tagsSel.length ? `[${tagsSel.join(', ')}]\n\n` : '';
+    const textoGuardar = tagsLine + texto.trim();
+
+    const { error } = await supabase.from('journal').insert({
+      user_id: userId,
+      texto: textoGuardar,
+      es_descarga: true,
+      via_audio: usedAudio,
+      tags: tagsSel.length ? tagsSel : null,
+    });
+    if (error) { Alert.alert('Error', error.message); setGuardando(false); return; }
+
+    const sumar = await sumarGotas(supabase, userId, 2);
+    if (sumar.subio) {
+      setCelebracion({ etapa: sumar.etapaDespues, plantaId: sumar.plantaId });
+    }
+
+    // Verificar logros
+    const nuevosLogros = await verificarLogros(supabase, userId, {
+      tipo: 'descarga',
+      tags: tagsSel,
+      viaAudio: usedAudio,
+    });
+    if (nuevosLogros.length > 0) {
+      setLogros(nuevosLogros);
+      setLogroIdx(0);
+    }
+
+    setGuardado(true);
+    setGuardando(false);
   }
 
-  function toggleTarea(id: string) {
-    setTareas(prev => prev.map(t => t.id === id ? { ...t, hecha: !t.hecha } : t));
+  function nuevaDescarga() {
+    setTexto('');
+    setTagsSel([]);
+    setGuardado(false);
+    setUsedAudio(false);
+    setCelebracion(null);
+    setLogros([]);
+    setLogroIdx(0);
   }
 
-  function agregarTarea() {
-    if (!nuevaTarea.trim()) return;
-    setTareas(prev => [...prev, { id: Date.now().toString(), texto: nuevaTarea.trim(), tag: 'personal', hecha: false }]);
-    setNuevaTarea('');
+  function cerrarLogro() {
+    if (logroIdx + 1 < logros.length) {
+      setLogroIdx(prev => prev + 1);
+    } else {
+      setLogros([]);
+      setLogroIdx(0);
+    }
   }
+
+  // ── Pantalla de confirmación tras guardar ──
+  if (guardado) {
+    return (
+      <View style={S.container}>
+        <View style={S.topBar}>
+          <View style={S.logoRow}>
+            <SentiLogo size={22} />
+            <Text style={S.logoText}>Senti</Text>
+          </View>
+        </View>
+
+        <View style={S.confirmWrap}>
+          <View style={S.confirmGlow} />
+          <Text style={S.confirmEmoji}>🌬️</Text>
+          <Text style={S.confirmLabel}>YA ESTÁ AFUERA</Text>
+          <Text style={S.confirmTitle}>Respira.{'\n'}Lo soltaste.</Text>
+          <Text style={S.confirmSub}>
+            Lo que escribiste se queda aquí, en tu santuario. Nadie más lo verá. Tu planta lo recibió como un riego silencioso.
+          </Text>
+
+          <TouchableOpacity style={S.btnNueva} onPress={nuevaDescarga} activeOpacity={0.85}>
+            <Ionicons name="add" size={18} color="#e4ffe0" />
+            <Text style={S.btnNuevaText}>Soltar otra cosa</Text>
+          </TouchableOpacity>
+        </View>
+
+        {celebracion && (
+          <CelebracionEtapa
+            visible={!!celebracion}
+            etapa={celebracion.etapa}
+            plantaId={celebracion.plantaId}
+            onClose={() => setCelebracion(null)}
+          />
+        )}
+        <LogroModal logro={logros[logroIdx] ?? null} onClose={cerrarLogro} />
+      </View>
+    );
+  }
+
+  // ── Pantalla principal ──
+  const scrollRef = useRef<ScrollView>(null);
 
   return (
-    <ScrollView style={S.container} contentContainerStyle={S.content} keyboardShouldPersistTaps="handled">
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
+    >
+    <ScrollView
+      ref={scrollRef}
+      style={S.container}
+      contentContainerStyle={S.content}
+      keyboardShouldPersistTaps="handled"
+    >
 
-      {/* TopBar logo */}
+      {/* TopBar */}
       <View style={S.topBar}>
         <View style={S.logoRow}>
-          <Text style={S.logoEmoji}>🌿</Text>
+          <SentiLogo size={22} />
           <Text style={S.logoText}>Senti</Text>
         </View>
-        <Text style={S.subtitle}>{STEP_TITLES[step]}</Text>
-
-        {/* Step dots */}
-        <View style={S.stepDots}>
-          {[0, 1, 2].map(i => <View key={i} style={[S.stepDot, step === i && S.stepDotActive]} />)}
-        </View>
-
-        {/* Botón urgente — solo en step 0 */}
-        {step === 0 && (
-          <TouchableOpacity style={S.btnUrgente} activeOpacity={0.85}>
-            <Text style={S.btnUrgenteText}>Necesito descargarme ya 🌊</Text>
-          </TouchableOpacity>
-        )}
       </View>
 
       <View style={S.section}>
 
-        {/* ── Step 0: Descarga ── */}
-        {step === 0 && (
-          <>
-            <Text style={S.secLabel}>¿Qué está dando vueltas en tu cabeza?</Text>
-            <View style={S.inputRow}>
-              <TextInput
-                style={[S.input, S.inputFlex]}
-                value={texto}
-                onChangeText={settexto}
-                placeholder="Estoy pensando en..."
-                placeholderTextColor="#A09890"
-                multiline
-                textAlignVertical="top"
-                editable={!guardando && !transcribing}
-              />
-              <TouchableOpacity
-                style={[S.audioBtn, isRecording && S.audioBtnActive]}
-                onPress={isRecording ? stopRecording : startRecording}
-                disabled={guardando || transcribing}
-                activeOpacity={0.7}
-              >
-                {transcribing
-                  ? <ActivityIndicator size="small" color="#6B6560" />
-                  : <Text style={S.audioBtnIcon}>{isRecording ? '⏹' : '🎙'}</Text>
-                }
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity
-              style={[S.btnMain, (guardando || isRecording || transcribing) && S.btnDisabled]}
-              onPress={handleListo}
-              disabled={guardando || isRecording || transcribing}
-              activeOpacity={0.85}
-            >
-              {guardando
-                ? <ActivityIndicator color="#3D2E1E" />
-                : <Text style={S.btnMainText}>Listo →</Text>
-              }
-            </TouchableOpacity>
-          </>
-        )}
+        {/* Hero editorial */}
+        <Text style={S.heroTitle}>Suelta lo que pesa.</Text>
+        <Text style={S.heroSub}>
+          Lo que sea. Un enojo, un pensamiento que da vueltas, algo que no le puedes decir a nadie. Aquí no hay juicios.
+        </Text>
 
-        {/* ── Step 1: Tareas ── */}
-        {step === 1 && (
-          <>
-            <Text style={S.secLabel}>¿Qué tareas tienes hoy?</Text>
-            <View style={[S.card, { paddingHorizontal: 14, paddingVertical: 10 }]}>
-              {tareas.map(t => (
-                <TouchableOpacity
-                  key={t.id}
-                  style={S.tareaRow}
-                  onPress={() => toggleTarea(t.id)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[S.check, t.hecha && S.checkDone]} />
-                  <Text style={[S.tareaText, t.hecha && S.tareaTextDone]} numberOfLines={1}>{t.texto}</Text>
-                  <View style={[S.tag, t.tag === 'trabajo' ? S.tagWork : S.tagPers]}>
-                    <Text style={[S.tagText, t.tag === 'trabajo' ? S.tagWorkText : S.tagPersText]}>{t.tag}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-              <View style={S.nuevaTareaRow}>
-                <TextInput
-                  style={S.nuevaTareaInput}
-                  value={nuevaTarea}
-                  onChangeText={setNuevaTarea}
-                  placeholder="+ Agregar tarea"
-                  placeholderTextColor="#8AB88A"
-                  onSubmitEditing={agregarTarea}
-                  returnKeyType="done"
-                />
-              </View>
-            </View>
+        {/* Card de input grande */}
+        <View style={S.inputCard}>
+          <TextInput
+            style={S.inputBig}
+            value={texto}
+            onChangeText={setTexto}
+            placeholder="Escribe lo que tienes adentro. Todo lo que digas se queda aquí, en tu santuario."
+            placeholderTextColor="#b1b3a9"
+            multiline
+            textAlignVertical="top"
+            maxLength={LIMITES_TEXTO.descarga}
+            editable={!guardando && !transcribing}
+            scrollEnabled
+            onContentSizeChange={() =>
+              scrollRef.current?.scrollToEnd({ animated: true })
+            }
+          />
+          <View style={S.inputFooter}>
+            <Text style={S.autoSave}>SOLO TÚ LO LEES</Text>
             <TouchableOpacity
-              style={S.btnMain}
-              onPress={() => setStep(2)}
-              activeOpacity={0.85}
-            >
-              <Text style={S.btnMainText}>Ver qué basta hacer hoy →</Text>
-            </TouchableOpacity>
-          </>
-        )}
-
-        {/* ── Step 2: Foco ── */}
-        {step === 2 && (
-          <>
-            <View style={S.focoCard}>
-              <Text style={S.focoLabel}>Solo basta hacer esto hoy</Text>
-              {tareasFoco.length > 0
-                ? tareasFoco.map(t => (
-                    <View key={t.id} style={S.focoItem}>
-                      <View style={S.focoDot} />
-                      <Text style={S.focoText}>{t.texto}</Text>
-                    </View>
-                  ))
-                : <Text style={S.focoText}>¡Ya tienes todo hecho! Disfruta el día.</Text>
-              }
-              {tareasIncompletas.length > 2 && (
-                <Text style={S.focoNote}>
-                  Las otras {tareasIncompletas.length - 2} tareas pueden esperar. El foco de hoy es lo que importa.
-                </Text>
-              )}
-            </View>
-
-            <TouchableOpacity
-              style={S.btnReset}
-              onPress={() => { setStep(0); setGuardado(false); settexto(''); }}
+              style={[S.micBtn, isRecording && S.micBtnActive]}
+              onPress={isRecording ? stopRecording : startRecording}
+              disabled={guardando || transcribing}
               activeOpacity={0.8}
             >
-              <Text style={S.btnResetText}>Nueva descarga</Text>
+              {transcribing
+                ? <ActivityIndicator size="small" color="#3d6841" />
+                : <Ionicons name={isRecording ? 'stop' : 'mic'} size={18} color={isRecording ? '#9e422c' : '#3d6841'} />
+              }
             </TouchableOpacity>
-          </>
-        )}
+          </View>
+        </View>
+
+        {/* Tags opcionales */}
+        <View style={S.tagsBlock}>
+          <Text style={S.tagsLabel}>¿QUIERES NOMBRARLO? <Text style={S.tagsLabelOpt}>(opcional)</Text></Text>
+          <View style={S.tagsRow}>
+            {TAGS.map(t => {
+              const sel = tagsSel.includes(t.id);
+              return (
+                <TouchableOpacity
+                  key={t.id}
+                  style={[S.tagChip, sel && S.tagChipSel]}
+                  onPress={() => toggleTag(t.id)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[S.tagChipText, sel && S.tagChipTextSel]}>{t.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Botón soltar */}
+        <TouchableOpacity
+          style={[S.btnSoltar, (guardando || isRecording || transcribing || !texto.trim()) && S.btnDisabled]}
+          onPress={soltar}
+          disabled={guardando || isRecording || transcribing || !texto.trim()}
+          activeOpacity={0.85}
+        >
+          {guardando
+            ? <ActivityIndicator color="#e4ffe0" />
+            : (
+              <>
+                <Ionicons name="leaf" size={18} color="#e4ffe0" />
+                <Text style={S.btnSoltarText}>Soltar</Text>
+              </>
+            )
+          }
+        </TouchableOpacity>
+
+        {/* Card editorial — sabiduría */}
+        <View style={S.editorialCard}>
+          <Text style={S.editorialLabel}>POR QUÉ AYUDA</Text>
+          <Text style={S.editorialTitle}>Poner palabras a lo que sientes.</Text>
+          <Text style={S.editorialBody}>
+            Las investigaciones muestran que nombrar una emoción reduce su intensidad. No tienes que entenderla — basta con sacarla.
+          </Text>
+        </View>
+
       </View>
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const S = StyleSheet.create({
-  container:       { flex: 1, backgroundColor: '#F7F5F0' },
-  content:         { paddingBottom: 32 },
+  container:    { flex: 1, backgroundColor: '#fbf9f4' },
+  content:      { paddingBottom: 48 },
 
-  topBar:          { paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16, borderBottomWidth: 0.5, borderBottomColor: '#E4E0D6', gap: 6 },
-  logoRow:         { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  logoEmoji:       { fontSize: 18 },
-  logoText:        { fontSize: 18, fontWeight: '700', color: '#31332c' },
-  subtitle:        { fontSize: 11, color: '#A09890' },
+  topBar:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 60, paddingBottom: 8 },
+  logoRow:      { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  logoText:     { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, color: '#31332c', letterSpacing: -0.3 },
 
-  stepDots:        { flexDirection: 'row', gap: 5, paddingTop: 4 },
-  stepDot:         { width: 20, height: 3, borderRadius: 2, backgroundColor: '#D0D8E8' },
-  stepDotActive:   { backgroundColor: '#8AB88A' },
+  section:      { paddingHorizontal: 24, paddingTop: 20, gap: 24 },
 
-  btnUrgente:      { backgroundColor: '#F5EDE8', borderWidth: 1, borderColor: '#D4A090', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 20, alignSelf: 'flex-start', marginTop: 2 },
-  btnUrgenteText:  { fontSize: 12, fontWeight: '600', color: '#8A4030' },
+  heroTitle:    { fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 38, color: '#31332c', letterSpacing: -0.9, lineHeight: 44 },
+  heroSub:      { fontFamily: 'Manrope_400Regular', fontSize: 15, color: '#5e6058', lineHeight: 23, marginTop: -16 },
 
-  section:         { paddingHorizontal: 20, paddingTop: 14 },
-  secLabel:        { fontSize: 10, color: '#A09890', marginBottom: 6, letterSpacing: 0.3 },
+  inputCard:    { backgroundColor: '#ffffff', borderRadius: 24, padding: 24, minHeight: 280, shadowColor: 'rgba(103,94,77,1)', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.08, shadowRadius: 24, elevation: 4 },
+  inputBig:     { fontFamily: 'Manrope_400Regular', fontSize: 16, color: '#31332c', lineHeight: 24, minHeight: 200, textAlignVertical: 'top' },
+  inputFooter:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 },
+  autoSave:     { fontFamily: 'Manrope_700Bold', fontSize: 9, color: '#b1b3a9', letterSpacing: 1.5 },
 
-  inputRow:        { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 10 },
-  inputFlex:       { flex: 1 },
-  input:           { backgroundColor: '#F0EDE6', borderRadius: 12, padding: 12, paddingHorizontal: 14, fontSize: 11, color: '#2C2820', minHeight: 80, lineHeight: 17 },
+  micBtn:       { width: 44, height: 44, borderRadius: 22, backgroundColor: '#f5f4ed', alignItems: 'center', justifyContent: 'center' },
+  micBtnActive: { backgroundColor: '#fde8e3' },
 
-  audioBtn:        { width: 38, height: 38, borderRadius: 10, backgroundColor: '#F0EDE6', alignItems: 'center', justifyContent: 'center', borderWidth: 0.5, borderColor: '#D8D4C8', flexShrink: 0 },
-  audioBtnActive:  { backgroundColor: '#FFE8E8', borderColor: '#E08080' },
-  audioBtnIcon:    { fontSize: 17 },
+  tagsBlock:    { gap: 12 },
+  tagsLabel:    { fontFamily: 'Manrope_700Bold', fontSize: 10, color: '#797c73', letterSpacing: 1.5 },
+  tagsLabelOpt: { fontFamily: 'Manrope_400Regular', color: '#b1b3a9', letterSpacing: 0.3 },
+  tagsRow:      { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  tagChip:      { backgroundColor: '#f5f4ed', borderRadius: 9999, paddingVertical: 10, paddingHorizontal: 16 },
+  tagChipSel:   { backgroundColor: '#bfefbd' },
+  tagChipText:  { fontFamily: 'Manrope_500Medium', fontSize: 13, color: '#5e6058' },
+  tagChipTextSel:{ fontFamily: 'PlusJakartaSans_700Bold', color: '#1e4824' },
 
-  btnMain:         { backgroundColor: '#C8BCA8', borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginBottom: 10 },
-  btnDisabled:     { opacity: 0.6 },
-  btnMainText:     { color: '#3D2E1E', fontSize: 11, fontWeight: '500' },
+  btnSoltar:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#3d6841', borderRadius: 9999, paddingVertical: 16 },
+  btnSoltarText:{ fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: '#e4ffe0', letterSpacing: 0.3 },
+  btnDisabled:  { opacity: 0.4 },
 
-  card:            { backgroundColor: '#fff', borderWidth: 0.5, borderColor: '#E4E0D6', borderRadius: 14, marginBottom: 10 },
-  tareaRow:        { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7, borderBottomWidth: 0.5, borderBottomColor: '#F0EDE6' },
-  check:           { width: 14, height: 14, borderRadius: 4, borderWidth: 1, borderColor: '#C8BCA8', flexShrink: 0 },
-  checkDone:       { backgroundColor: '#C8BCA8', borderColor: '#C8BCA8' },
-  tareaText:       { flex: 1, fontSize: 11, color: '#4A4540' },
-  tareaTextDone:   { color: '#A09890', textDecorationLine: 'line-through' },
-  tag:             { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
-  tagWork:         { backgroundColor: '#E8EDF5' },
-  tagPers:         { backgroundColor: '#F5EDE0' },
-  tagText:         { fontSize: 9, fontWeight: '500' },
-  tagWorkText:     { color: '#2E4A6A' },
-  tagPersText:     { color: '#7A4F2E' },
-  nuevaTareaRow:   { paddingVertical: 8 },
-  nuevaTareaInput: { fontSize: 11, color: '#2C2820', padding: 0 },
+  editorialCard:{ backgroundColor: '#bfefbd', borderRadius: 24, padding: 24, marginTop: 8, gap: 8 },
+  editorialLabel:{ fontFamily: 'Manrope_700Bold', fontSize: 10, color: '#3d6841', letterSpacing: 1.8 },
+  editorialTitle:{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 22, color: '#1e4824', letterSpacing: -0.4, lineHeight: 28, marginTop: 4 },
+  editorialBody:{ fontFamily: 'Manrope_400Regular', fontSize: 13, color: '#3d6841', lineHeight: 20, marginTop: 4 },
 
-  focoCard:        { backgroundColor: '#F0F5F0', borderWidth: 0.5, borderColor: '#B8D4B8', borderRadius: 14, padding: 14, marginBottom: 14 },
-  focoLabel:       { fontSize: 9, fontWeight: '500', color: '#5A8A5A', letterSpacing: 0.5, marginBottom: 8, textTransform: 'uppercase' },
-  focoItem:        { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 6 },
-  focoDot:         { width: 6, height: 6, borderRadius: 3, backgroundColor: '#8AB88A', flexShrink: 0, marginTop: 3 },
-  focoText:        { fontSize: 11, color: '#3A3530', lineHeight: 17, flex: 1 },
-  focoNote:        { fontSize: 10, color: '#7A9A7A', marginTop: 6 },
+  // Pantalla de confirmación
+  confirmWrap:  { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingBottom: 60 },
+  confirmGlow:  { position: 'absolute', width: 280, height: 280, borderRadius: 140, backgroundColor: '#bfefbd', opacity: 0.4, top: '20%' },
+  confirmEmoji: { fontSize: 80, marginBottom: 16 },
+  confirmLabel: { fontFamily: 'Manrope_700Bold', fontSize: 11, color: '#3d6841', letterSpacing: 2 },
+  confirmTitle: { fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 36, color: '#31332c', textAlign: 'center', lineHeight: 42, letterSpacing: -0.8, marginTop: 12 },
+  confirmSub:   { fontFamily: 'Manrope_400Regular', fontSize: 14, color: '#5e6058', textAlign: 'center', lineHeight: 22, marginTop: 16, paddingHorizontal: 16 },
 
-  btnReset:        { alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 24 },
-  btnResetText:    { fontSize: 13, color: '#8AB88A', fontWeight: '500' },
+  btnNueva:     { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#3d6841', borderRadius: 9999, paddingVertical: 16, paddingHorizontal: 32, marginTop: 40 },
+  btnNuevaText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: '#e4ffe0', letterSpacing: 0.3 },
 });

@@ -1,11 +1,17 @@
 import { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert, SafeAreaView,
+  ActivityIndicator, Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { signInWithGoogle } from '../../lib/auth';
+import SentiLogo from '../../components/SentiLogo';
 
 export default function WelcomeScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
 
   async function handleGoogle() {
@@ -16,41 +22,45 @@ export default function WelcomeScreen() {
   }
 
   return (
-    <SafeAreaView style={S.safe}>
+    <View style={[S.safe, { paddingTop: insets.top, paddingBottom: insets.bottom + 12 }]}>
       <View style={S.container}>
 
-        {/* Sección superior */}
-        <View style={S.top}>
-          <View style={S.badge}>
-            <Text style={S.badgeText}>Tu espacio seguro</Text>
+        {/* Hero editorial */}
+        <View style={S.hero}>
+          <View style={S.brandRow}>
+            <SentiLogo size={24} />
+            <Text style={S.brand}>Senti</Text>
           </View>
+        </View>
 
-          <Text style={S.hero}>Senti</Text>
-          <Text style={S.tagline}>Cuídate como{'\n'}cuidas a los demás</Text>
+        {/* Planta con glow */}
+        <View style={S.plantaWrap}>
+          <View style={S.plantaGlow} />
+          <Text style={S.plantaEmoji}>🌱</Text>
+        </View>
 
+        {/* Tagline grande */}
+        <View style={S.taglineWrap}>
+          <Text style={S.taglineLabel}>TU ESPACIO SEGURO</Text>
+          <Text style={S.tagline}>Cuídate como cuidas a los demás.</Text>
           <Text style={S.desc}>
-            Un lugar tranquilo para entender cómo estás,
-            sin juicios y sin prisa.
+            Un lugar tranquilo para entender cómo estás, sin juicios y sin prisa.
           </Text>
         </View>
 
-        {/* Planta decorativa */}
-        <View style={S.plantaWrap}>
-          <Text style={S.plantaEmoji}>🌱</Text>
-          <View style={S.plantaSombra} />
-        </View>
-
-        {/* Valores */}
+        {/* Valores — minimalistas */}
         <View style={S.valores}>
           {VALORES.map((v, i) => (
             <View key={i} style={S.valorRow}>
-              <Text style={S.valorEmoji}>{v.emoji}</Text>
+              <View style={S.valorIcon}>
+                <Ionicons name={v.icon} size={14} color="#3d6841" />
+              </View>
               <Text style={S.valorText}>{v.texto}</Text>
             </View>
           ))}
         </View>
 
-        {/* Botón Google */}
+        {/* Footer con CTA */}
         <View style={S.footer}>
           <TouchableOpacity
             style={[S.btnGoogle, loading && S.btnDisabled]}
@@ -59,7 +69,7 @@ export default function WelcomeScreen() {
             activeOpacity={0.85}
           >
             {loading
-              ? <ActivityIndicator color="#31332c" />
+              ? <ActivityIndicator color="#e4ffe0" />
               : (
                 <>
                   <Text style={S.googleIcon}>G</Text>
@@ -70,49 +80,52 @@ export default function WelcomeScreen() {
           </TouchableOpacity>
 
           <Text style={S.legal}>
-            Al entrar aceptas que tus datos se usan solo para personalizar tu experiencia.
-            Nunca compartimos tu información.
+            Al continuar aceptas nuestros{' '}
+            <Text style={S.legalLink} onPress={() => router.push('/privacidad' as any)}>
+              Términos y Política de Privacidad
+            </Text>
+            . Tus datos nunca se comparten con terceros.
           </Text>
         </View>
 
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
-const VALORES = [
-  { emoji: '🔒', texto: 'Tu diario es privado y solo tuyo' },
-  { emoji: '🌿', texto: 'Sin juicios, sin comparaciones' },
-  { emoji: '✨', texto: 'Pequeños pasos que sí se notan' },
+const VALORES: Array<{ icon: keyof typeof Ionicons.glyphMap; texto: string }> = [
+  { icon: 'lock-closed', texto: 'Tu diario es privado y solo tuyo' },
+  { icon: 'leaf',        texto: 'Sin juicios, sin comparaciones' },
+  { icon: 'sparkles',    texto: 'Pequeños pasos que sí se notan' },
 ];
 
 const S = StyleSheet.create({
   safe:         { flex: 1, backgroundColor: '#fbf9f4' },
-  container:    { flex: 1, paddingHorizontal: 24, paddingTop: 48, paddingBottom: 32 },
+  container:    { flex: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 24 },
 
-  top:          { alignItems: 'center', gap: 12 },
-  badge:        { backgroundColor: '#bfefbd', borderRadius: 9999, paddingVertical: 6, paddingHorizontal: 16 },
-  badgeText:    { fontFamily: 'Manrope_600SemiBold', fontSize: 12, color: '#3d6841', letterSpacing: 0.5 },
+  hero:         { alignItems: 'flex-start' },
+  brandRow:     { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  brand:        { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, color: '#31332c', letterSpacing: -0.3 },
 
-  hero:         { fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 56, color: '#31332c', lineHeight: 60 },
-  tagline:      { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 28, color: '#31332c', textAlign: 'center', lineHeight: 36 },
-  desc:         { fontFamily: 'Manrope_400Regular', fontSize: 16, color: '#5e6058', textAlign: 'center', lineHeight: 25.6, marginTop: 4 },
+  plantaWrap:   { alignItems: 'center', justifyContent: 'center', height: 200, marginTop: 24 },
+  plantaGlow:   { position: 'absolute', width: 220, height: 220, borderRadius: 110, backgroundColor: '#bfefbd', opacity: 0.5 },
+  plantaEmoji:  { fontSize: 120 },
 
-  plantaWrap:   { alignItems: 'center', marginVertical: 32 },
-  plantaEmoji:  { fontSize: 80 },
-  plantaSombra: { width: 60, height: 8, backgroundColor: '#e2e3d9', borderRadius: 9999, marginTop: 8, opacity: 0.6 },
+  taglineWrap:  { gap: 10, marginTop: 16 },
+  taglineLabel: { fontFamily: 'Manrope_700Bold', fontSize: 10, color: '#797c73', letterSpacing: 1.8 },
+  tagline:      { fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 36, color: '#31332c', letterSpacing: -0.8, lineHeight: 42 },
+  desc:         { fontFamily: 'Manrope_400Regular', fontSize: 15, color: '#5e6058', lineHeight: 23, marginTop: 4 },
 
-  valores:      { gap: 12, marginBottom: 32 },
-  valorRow:     { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#f5f4ed', borderRadius: 12, padding: 14 },
-  valorEmoji:   { fontSize: 20 },
-  valorText:    { fontFamily: 'Manrope_500Medium', fontSize: 14, color: '#31332c', flex: 1 },
+  valores:      { gap: 10, marginTop: 28 },
+  valorRow:     { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  valorIcon:    { width: 28, height: 28, borderRadius: 14, backgroundColor: '#bfefbd', alignItems: 'center', justifyContent: 'center' },
+  valorText:    { fontFamily: 'Manrope_500Medium', fontSize: 14, color: '#5e6058', flex: 1 },
 
-  footer:       { gap: 16, marginTop: 'auto' as any },
-
-  btnGoogle:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#eee1cc', borderRadius: 9999, paddingVertical: 16 },
+  footer:       { gap: 14, marginTop: 'auto' as any },
+  btnGoogle:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#3d6841', borderRadius: 9999, paddingVertical: 16 },
   btnDisabled:  { opacity: 0.6 },
-  googleIcon:   { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, color: '#595141' },
-  btnGoogleText:{ fontFamily: 'PlusJakartaSans_700Bold', fontSize: 16, color: '#595141' },
-
+  googleIcon:   { fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 18, color: '#e4ffe0' },
+  btnGoogleText:{ fontFamily: 'PlusJakartaSans_700Bold', fontSize: 16, color: '#e4ffe0' },
   legal:        { fontFamily: 'Manrope_400Regular', fontSize: 11, color: '#797c73', textAlign: 'center', lineHeight: 16 },
+  legalLink:    { fontFamily: 'Manrope_700Bold', color: '#3d6841', textDecorationLine: 'underline' },
 });

@@ -10,12 +10,24 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#F5F0E8"
+      "backgroundColor": "#fbf9f4"
     },
     "android": {
+      "package": "cl.sentiapp.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#F5F0E8"
+        "backgroundColor": "#fbf9f4"
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "cl.sentiapp.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Senti necesita el micrófono para grabar notas de voz."
       }
     },
     "web": {
@@ -25,10 +37,24 @@
     "plugins": [
       "expo-router",
       "expo-web-browser",
-      "expo-font"
+      "expo-font",
+      "react-native-purchases",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Senti necesita el micrófono para grabar notas de voz."
+        }
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "52d1671a-233a-415d-bb4c-78d022ebb419"
+      }
     }
   }
 }

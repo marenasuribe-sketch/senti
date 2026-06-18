@@ -3,19 +3,24 @@ import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   ActivityIndicator, StyleSheet, Alert,
 } from 'react-native';
-import { Audio } from 'expo-av';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useAudioRecorder, AudioModule, RecordingPresets } from 'expo-audio';
 import { supabase } from '../../lib/supabase';
+import { sumarGotas } from '../../lib/planta';
+import { LIMITES_TEXTO, superaLimite } from '../../lib/validation';
+import { verificarLogros, type Logro } from '../../lib/logros';
+import { usePremium } from '../../hooks/usePremium';
+import SentiLogo from '../../components/SentiLogo';
+import CelebracionEtapa from '../../components/CelebracionEtapa';
+import LogroModal from '../../components/LogroModal';
 
 type Gratitud = { id: string; texto: string; created_at: string };
-type AudioField = 'momento' | 'persona' | 'victoria';
+type Campo = 'momento' | 'persona' | 'victoria';
 
 function startOfWeek() {
   const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - d.getDay());
   return d.toISOString();
-}
-
-function startOfMonth() {
-  const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0); return d.toISOString();
 }
 
 function calcularRacha(entradas: Gratitud[]): number {
@@ -30,20 +35,21 @@ function calcularRacha(entradas: Gratitud[]): number {
   return racha;
 }
 
-async function transcribeAudio(uri: string): Promise<string> {
-  const OPENAI_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY!;
-  const formData = new FormData();
-  formData.append('file', { uri, name: 'audio.m4a', type: 'audio/m4a' } as any);
-  formData.append('model', 'whisper-1');
-  formData.append('language', 'es');
-  const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-    method: 'POST', headers: { Authorization: `Bearer ${OPENAI_KEY}` }, body: formData,
-  });
-  if (!res.ok) throw new Error('Error transcribiendo');
-  return (await res.json()).text as string;
+function fechaCorta(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }).toUpperCase().replace('.', '');
+}
+
+function resumenEntrada(texto: string): string {
+  const partes = texto.split('\n').map(p => p.replace(/^(Momento|Persona|Victoria):\s*/, '').trim()).filter(Boolean);
+  return partes.join(' · ');
 }
 
 export default function GratitudScreen() {
+  const router = useRouter();
+  const { esPremium } = usePremium();
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+
   const [momento, setMomento]   = useState('');
   const [persona, setPersona]   = useState('');
   const [victoria, setVictoria] = useState('');
@@ -52,8 +58,12 @@ export default function GratitudScreen() {
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [racha, setRacha]       = useState(0);
-  const [recording, setRecording] = useState<{ field: AudioField; rec: Audio.Recording } | null>(null);
-  const [transcribing, setTranscribing] = useState<AudioField | null>(null);
+  const [grabandoCampo, setGrabandoCampo] = useState<Campo | null>(null);
+  const [transcribing, setTranscribing]   = useState(false);
+
+  const [celebracion, setCelebracion] = useState<{ etapa: number; plantaId: string | null } | null>(null);
+  const [logros, setLogros]           = useState<Logro[]>([]);
+  const [logroIdx, setLogroIdx]       = useState(0);
 
   useEffect(() => { cargar(); }, []);
 
@@ -72,34 +82,69 @@ export default function GratitudScreen() {
     setCargando(false);
   }
 
-  async function startRecording(field: AudioField) {
-    try {
-      const { granted } = await Audio.requestPermissionsAsync();
-      if (!granted) { Alert.alert('Permiso denegado', 'Senti necesita acceso al micrófono.'); return; }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording: rec } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      setRecording({ field, rec });
-    } catch { Alert.alert('Error', 'No se pudo iniciar la grabación.'); }
-  }
+  const setters: Record<Campo, (v: string) => void> = {
+    momento: setMomento,
+    persona: setPersona,
+    victoria: setVictoria,
+  };
 
-  async function stopRecording() {
-    if (!recording) return;
-    const { field, rec } = recording;
-    try {
-      setTranscribing(field);
-      await rec.stopAndUnloadAsync();
-      const uri = rec.getURI(); setRecording(null);
-      if (!uri) throw new Error('Sin audio');
-      const t = await transcribeAudio(uri);
-      if (field === 'momento') setMomento(prev => prev.trim() ? `${prev.trim()} ${t}` : t);
-      if (field === 'persona') setPersona(prev => prev.trim() ? `${prev.trim()} ${t}` : t);
-      if (field === 'victoria') setVictoria(prev => prev.trim() ? `${prev.trim()} ${t}` : t);
-    } catch { Alert.alert('Error al transcribir', 'Intenta de nuevo.'); }
-    finally { setTranscribing(null); }
+  async function handleMic(campo: Campo) {
+    if (!esPremium) {
+      Alert.alert(
+        'Audio en Gratitud',
+        'Con Senti+ puedes dictar tus gratitudes por voz en cualquier campo.',
+        [{ text: 'Cerrar', style: 'cancel' }, { text: 'Ver Senti+', onPress: () => router.push('/upgrade') }],
+      );
+      return;
+    }
+    if (grabandoCampo === campo) {
+      // Detener y transcribir
+      try {
+        setTranscribing(true);
+        await recorder.stop();
+        const uri = recorder.uri;
+        setGrabandoCampo(null);
+        if (!uri) throw new Error('Sin audio');
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('Sin sesión');
+        const ext = uri.split('.').pop()?.toLowerCase() ?? 'm4a';
+        const mimeMap: Record<string, string> = { m4a: 'audio/m4a', mp4: 'audio/mp4', wav: 'audio/wav', caf: 'audio/x-caf' };
+        const formData = new FormData();
+        formData.append('file', { uri, name: `audio.${ext}`, type: mimeMap[ext] ?? 'audio/m4a' } as any);
+        const { data, error } = await supabase.functions.invoke('transcribir-audio', {
+          body: formData,
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (error || data?.error) throw new Error(data?.error ?? error?.message);
+        const setter = setters[campo];
+        setter(data.texto ?? '');
+      } catch (e: any) {
+        const msg = e?.message ?? String(e);
+        if (msg === 'LIMITE_AUDIO_GRATIS' || msg === 'LIMITE_AUDIO_PREMIUM') {
+          Alert.alert('Límite de audio', 'Ya usaste todos tus audios de hoy.');
+        } else {
+          Alert.alert('Error al transcribir', msg);
+        }
+      } finally { setTranscribing(false); }
+    } else {
+      // Iniciar grabación
+      if (grabandoCampo) {
+        await recorder.stop(); // parar el campo anterior si hay
+      }
+      const { granted } = await AudioModule.requestRecordingPermissionsAsync();
+      if (!granted) { Alert.alert('Permiso denegado', 'Senti necesita acceso al micrófono.'); return; }
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+      setGrabandoCampo(campo);
+    }
   }
 
   async function guardar() {
     if (!momento.trim() && !persona.trim() && !victoria.trim()) return;
+    if (superaLimite(momento, 'gratitud') || superaLimite(persona, 'gratitud') || superaLimite(victoria, 'gratitud')) {
+      Alert.alert('Texto demasiado largo', `Cada campo tiene un máximo de ${LIMITES_TEXTO.gratitud} caracteres.`);
+      return;
+    }
     setGuardando(true);
 
     const { data: { session } } = await supabase.auth.getSession();
@@ -123,185 +168,265 @@ export default function GratitudScreen() {
       setSemana(updated.filter(e => e.created_at >= startOfWeek()));
       setMomento(''); setPersona(''); setVictoria('');
 
-      // Sumar 2 gotas
-      const { data: planta } = await supabase
-        .from('plantas_usuario').select('puntos').eq('user_id', userId).single();
-      if (planta) {
-        await supabase.from('plantas_usuario')
-          .update({ puntos: planta.puntos + 2 }).eq('user_id', userId);
+      const sumar = await sumarGotas(supabase, userId, 2);
+      if (sumar.subio) {
+        setCelebracion({ etapa: sumar.etapaDespues, plantaId: sumar.plantaId });
+      }
+
+      // Verificar logros
+      const tresAnclajes = !!(momento.trim() && persona.trim() && victoria.trim());
+      const nuevosLogros = await verificarLogros(supabase, userId, {
+        tipo: 'gratitud',
+        tresAnclajes,
+      });
+      if (nuevosLogros.length > 0) {
+        setLogros(nuevosLogros);
+        setLogroIdx(0);
       }
     }
     setGuardando(false);
   }
 
-  const mesCount = todas.filter(e => e.created_at >= startOfMonth()).length;
-  const isAnyRecording = !!recording;
+  function cerrarLogro() {
+    if (logroIdx + 1 < logros.length) {
+      setLogroIdx(prev => prev + 1);
+    } else {
+      setLogros([]);
+      setLogroIdx(0);
+    }
+  }
 
-  function AudioBtn({ field }: { field: AudioField }) {
-    const isThis = recording?.field === field;
-    const isTranscribing = transcribing === field;
+  function MicBtn({ campo }: { campo: Campo }) {
+    const activo = grabandoCampo === campo;
     return (
       <TouchableOpacity
-        style={[S.audioBtn, isThis && S.audioBtnActive]}
-        onPress={isThis ? stopRecording : () => startRecording(field)}
-        disabled={isTranscribing || (!isThis && isAnyRecording)}
+        style={[S.micMini, activo && S.micMiniActive]}
+        onPress={() => handleMic(campo)}
         activeOpacity={0.7}
+        disabled={transcribing}
       >
-        {isTranscribing
-          ? <ActivityIndicator size="small" color="#6B6560" />
-          : <Text style={S.audioBtnIcon}>{isThis ? '⏹' : '🎙'}</Text>
-        }
+        {transcribing && grabandoCampo === campo ? (
+          <ActivityIndicator size="small" color="#3d6841" />
+        ) : esPremium ? (
+          <Ionicons name={activo ? 'stop' : 'mic'} size={14} color={activo ? '#c0392b' : '#3d6841'} />
+        ) : (
+          <View style={S.micLockWrap}>
+            <Ionicons name="mic" size={14} color="#b1b3a9" />
+            <View style={S.micLockBadge}>
+              <Ionicons name="lock-closed" size={7} color="#fff" />
+            </View>
+          </View>
+        )}
       </TouchableOpacity>
     );
   }
 
+  const algoEscrito = momento.trim() || persona.trim() || victoria.trim();
+
   return (
     <ScrollView style={S.container} contentContainerStyle={S.content} keyboardShouldPersistTaps="handled">
 
-      {/* TopBar logo */}
+      {/* TopBar */}
       <View style={S.topBar}>
         <View style={S.logoRow}>
-          <Text style={S.logoEmoji}>🌿</Text>
+          <SentiLogo size={22} />
           <Text style={S.logoText}>Senti</Text>
         </View>
-        <Text style={S.subtitle}>Lo bueno de hoy</Text>
+        <View style={S.rachaChip}>
+          <Ionicons name="flame" size={13} color="#9e422c" />
+          <Text style={S.rachaChipText}>{racha} {racha === 1 ? 'día' : 'días'}</Text>
+        </View>
       </View>
 
       <View style={S.section}>
 
-        {/* Racha */}
-        <View style={S.streak}>
-          <Text style={S.streakNum}>{racha}</Text>
-          <Text style={S.streakText}>días seguidos{'\n'}anotando gratitud</Text>
+        {/* Hero editorial */}
+        <Text style={S.heroTitle}>La luz de hoy.</Text>
+        <Text style={S.heroSub}>Respira suavemente y nota los pequeños anclajes que te sostuvieron hoy.</Text>
+
+        {/* Card de los 3 anclajes */}
+        <View style={S.anclajesCard}>
+
+          <View style={S.anclajeBlock}>
+            <View style={S.anclajeLabelRow}>
+              <Text style={S.anclajeLabel}>ALGO QUE DISFRUTASTE</Text>
+              <MicBtn campo="momento" />
+            </View>
+            <TextInput
+              style={S.anclajeInput}
+              value={momento}
+              onChangeText={setMomento}
+              placeholder="Algo pequeño que te dio alegría…"
+              placeholderTextColor="rgba(121,124,115,0.5)"
+              multiline
+              maxLength={LIMITES_TEXTO.gratitud}
+              editable={!guardando}
+            />
+          </View>
+
+          <View style={S.anclajeBlock}>
+            <View style={S.anclajeLabelRow}>
+              <Text style={S.anclajeLabel}>ALGUIEN QUE AGRADECES</Text>
+              <MicBtn campo="persona" />
+            </View>
+            <TextInput
+              style={S.anclajeInput}
+              value={persona}
+              onChangeText={setPersona}
+              placeholder="Una persona o presencia que agradeces…"
+              placeholderTextColor="rgba(121,124,115,0.5)"
+              multiline
+              maxLength={LIMITES_TEXTO.gratitud}
+              editable={!guardando}
+            />
+          </View>
+
+          <View style={S.anclajeBlock}>
+            <View style={S.anclajeLabelRow}>
+              <Text style={S.anclajeLabel}>ALGO QUE LOGRASTE</Text>
+              <MicBtn campo="victoria" />
+            </View>
+            <TextInput
+              style={S.anclajeInput}
+              value={victoria}
+              onChangeText={setVictoria}
+              placeholder="Una victoria personal o un momento de paz…"
+              placeholderTextColor="rgba(121,124,115,0.5)"
+              multiline
+              maxLength={LIMITES_TEXTO.gratitud}
+              editable={!guardando}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[S.btnGuardar, (guardando || !algoEscrito) && S.btnDisabled]}
+            onPress={guardar}
+            disabled={guardando || !algoEscrito}
+            activeOpacity={0.85}
+          >
+            {guardando
+              ? <ActivityIndicator color="#e4ffe0" />
+              : <Text style={S.btnGuardarText}>Guardar reflexiones</Text>
+            }
+          </TouchableOpacity>
         </View>
 
-        {/* Anchor 1 */}
-        <Text style={S.secLabel}>Un momento que disfrutaste</Text>
-        <View style={S.inputRow}>
-          <TextInput
-            style={[S.input, S.inputFlex]}
-            value={momento}
-            onChangeText={setMomento}
-            placeholder="Hoy disfruté..."
-            placeholderTextColor="#A09890"
-            multiline
-            textAlignVertical="top"
-            editable={!guardando && !transcribing}
-          />
-          <AudioBtn field="momento" />
+        {/* Sección semana pasada */}
+        <View style={S.sectionHeader}>
+          <Text style={S.sectionTitle}>Semana pasada</Text>
+          <TouchableOpacity onPress={() => router.push('/historial-gratitud')} activeOpacity={0.7}>
+            <Text style={S.sectionLink}>Ver historial →</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Anchor 2 */}
-        <Text style={S.secLabel}>Alguien que agradeces</Text>
-        <View style={S.inputRow}>
-          <TextInput
-            style={[S.input, S.inputFlex]}
-            value={persona}
-            onChangeText={setPersona}
-            placeholder="Hoy agradezco a..."
-            placeholderTextColor="#A09890"
-            multiline
-            textAlignVertical="top"
-            editable={!guardando && !transcribing}
-          />
-          <AudioBtn field="persona" />
-        </View>
+        {cargando ? (
+          <View style={S.loadingBox}><ActivityIndicator color="#3d6841" /></View>
+        ) : semana.length === 0 ? (
+          <View style={S.emptyCard}>
+            <Ionicons name="flower-outline" size={28} color="#797c73" />
+            <Text style={S.emptyText}>Aún no hay entradas esta semana.{'\n'}Empieza con una arriba.</Text>
+          </View>
+        ) : (
+          // Una sola card compacta con la última entrada + contador del resto
+          <View style={S.ultimaCard}>
+            <View style={S.entradaHeader}>
+              <Text style={S.entradaFecha}>{fechaCorta(semana[0].created_at)}</Text>
+              <Ionicons name="sparkles" size={16} color="#3d6841" />
+            </View>
+            <Text style={S.entradaTextoDestacada} numberOfLines={3}>
+              "{resumenEntrada(semana[0].texto)}"
+            </Text>
+            {semana.length > 1 && (
+              <Text style={S.contadorRestante}>
+                + {semana.length - 1} {semana.length - 1 === 1 ? 'entrada más esta semana' : 'entradas más esta semana'}
+              </Text>
+            )}
+          </View>
+        )}
 
-        {/* Anchor 3 */}
-        <Text style={S.secLabel}>Una victoria personal</Text>
-        <View style={S.inputRow}>
-          <TextInput
-            style={[S.input, S.inputFlex]}
-            value={victoria}
-            onChangeText={setVictoria}
-            placeholder="Hoy logré..."
-            placeholderTextColor="#A09890"
-            multiline
-            textAlignVertical="top"
-            editable={!guardando && !transcribing}
-          />
-          <AudioBtn field="victoria" />
+        {/* Cápsula mensual (premium teaser) */}
+        <View style={S.capsulaCard}>
+          <View style={{ flex: 1, gap: 6 }}>
+            <Text style={S.capsulaTitle}>Cápsula mensual</Text>
+            <Text style={S.capsulaSub}>Una colección de tus temas y recuerdos más frecuentes del mes.</Text>
+            <View style={S.capsulaTag}>
+              <Text style={S.capsulaTagText}>PREMIUM</Text>
+            </View>
+          </View>
+          <View style={S.capsulaLock}>
+            <Ionicons name="lock-closed" size={20} color="#fff8f0" />
+          </View>
         </View>
-
-        {/* Guardar */}
-        <TouchableOpacity
-          style={[S.btnMain, (guardando || isAnyRecording) && S.btnDisabled]}
-          onPress={guardar}
-          disabled={guardando || isAnyRecording}
-          activeOpacity={0.85}
-        >
-          {guardando
-            ? <ActivityIndicator color="#3D2E1E" />
-            : <Text style={S.btnMainText}>Guardar momento</Text>
-          }
-        </TouchableOpacity>
-
-        {/* Semana pasada — resumen compacto */}
-        <Text style={S.secLabel}>Semana pasada</Text>
-        <View style={S.card}>
-          {cargando
-            ? <ActivityIndicator color="#8AB88A" />
-            : semana.length === 0
-              ? <Text style={S.emptyText}>Aún no hay entradas esta semana</Text>
-              : (
-                <View style={S.semanaCompact}>
-                  <Text style={S.semanaResumen}>
-                    {semana.length} {semana.length === 1 ? 'momento anotado' : 'momentos anotados'} esta semana
-                  </Text>
-                  <View style={S.semanaDots}>
-                    {semana.slice(0, 7).map((_, i) => (
-                      <View key={i} style={S.semanaDot} />
-                    ))}
-                  </View>
-                </View>
-              )
-          }
-        </View>
-        <TouchableOpacity style={S.btnHistorial} activeOpacity={0.8}>
-          <Text style={S.btnHistorialText}>Ver historial ({mesCount} este mes) →</Text>
-        </TouchableOpacity>
 
       </View>
+
+      {celebracion && (
+        <CelebracionEtapa
+          visible={!!celebracion}
+          etapa={celebracion.etapa}
+          plantaId={celebracion.plantaId}
+          onClose={() => setCelebracion(null)}
+        />
+      )}
+      <LogroModal logro={logros[logroIdx] ?? null} onClose={cerrarLogro} />
     </ScrollView>
   );
 }
 
 const S = StyleSheet.create({
-  container:        { flex: 1, backgroundColor: '#F7F5F0' },
-  content:          { paddingBottom: 32 },
-  topBar:           { paddingHorizontal: 20, paddingTop: 60, paddingBottom: 14, borderBottomWidth: 0.5, borderBottomColor: '#E4E0D6' },
-  logoRow:          { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  logoEmoji:        { fontSize: 18 },
-  logoText:         { fontSize: 18, fontWeight: '700', color: '#31332c' },
-  subtitle:         { fontSize: 11, color: '#A09890', marginTop: 4 },
-  section:          { padding: 14, paddingHorizontal: 20 },
+  container:    { flex: 1, backgroundColor: '#fbf9f4' },
+  content:      { paddingBottom: 48 },
 
-  streak:           { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FDF8F0', borderWidth: 0.5, borderColor: '#E8D4A8', borderRadius: 12, padding: 10, paddingHorizontal: 14, marginBottom: 14 },
-  streakNum:        { fontSize: 20, fontWeight: '500', color: '#C4A86A' },
-  streakText:       { fontSize: 10, color: '#6B6560', lineHeight: 16 },
+  topBar:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 60, paddingBottom: 8 },
+  logoRow:      { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  logoText:     { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 18, color: '#31332c', letterSpacing: -0.3 },
+  rachaChip:    { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#f5e8e3', borderRadius: 9999, paddingVertical: 6, paddingHorizontal: 12 },
+  rachaChipText:{ fontFamily: 'Manrope_700Bold', fontSize: 11, color: '#9e422c', letterSpacing: 0.3 },
 
-  secLabel:         { fontSize: 10, color: '#A09890', marginBottom: 6, letterSpacing: 0.3, marginTop: 4 },
+  section:      { paddingHorizontal: 24, paddingTop: 16, gap: 24 },
 
-  inputRow:         { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 10 },
-  inputFlex:        { flex: 1 },
-  input:            { backgroundColor: '#F0EDE6', borderRadius: 12, padding: 12, paddingHorizontal: 14, fontSize: 11, color: '#2C2820', minHeight: 52, lineHeight: 17 },
+  heroTitle:    { fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 44, color: '#31332c', letterSpacing: -1.2, lineHeight: 50 },
+  heroSub:      { fontFamily: 'Manrope_400Regular', fontSize: 16, color: '#5e6058', lineHeight: 24, marginTop: -16 },
 
-  audioBtn:         { width: 38, height: 38, borderRadius: 10, backgroundColor: '#F0EDE6', alignItems: 'center', justifyContent: 'center', borderWidth: 0.5, borderColor: '#D8D4C8', flexShrink: 0 },
-  audioBtnActive:   { backgroundColor: '#FFE8E8', borderColor: '#E08080' },
-  audioBtnIcon:     { fontSize: 17 },
+  anclajesCard: { backgroundColor: '#f5f4ed', borderRadius: 24, padding: 22, gap: 18 },
+  anclajeBlock: { gap: 6 },
+  anclajeLabelRow:{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 },
+  anclajeLabel: { fontFamily: 'Manrope_700Bold', fontSize: 10, color: '#797c73', letterSpacing: 1.5 },
+  anclajeInput: { backgroundColor: '#e2e3d9', borderRadius: 14, padding: 14, fontFamily: 'Manrope_400Regular', fontSize: 14, color: '#31332c', minHeight: 50, lineHeight: 20, textAlignVertical: 'top' },
 
-  btnMain:          { backgroundColor: '#C8BCA8', borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginBottom: 16, marginTop: 4 },
-  btnDisabled:      { opacity: 0.6 },
-  btnMainText:      { color: '#3D2E1E', fontSize: 11, fontWeight: '500' },
+  micMini:       { width: 28, height: 28, borderRadius: 14, backgroundColor: '#fbf9f4', alignItems: 'center', justifyContent: 'center' },
+  micMiniActive: { backgroundColor: '#fde8e8' },
+  micLockWrap:  { position: 'relative', width: 14, height: 14, alignItems: 'center', justifyContent: 'center' },
+  micLockBadge: { position: 'absolute', bottom: -3, right: -5, width: 11, height: 11, borderRadius: 6, backgroundColor: '#797c73', alignItems: 'center', justifyContent: 'center' },
 
-  card:             { backgroundColor: '#fff', borderWidth: 0.5, borderColor: '#E4E0D6', borderRadius: 14, padding: 14, marginBottom: 8 },
-  emptyText:        { fontSize: 11, color: '#A09890', fontStyle: 'italic' },
+  btnGuardar:   { backgroundColor: '#3d6841', borderRadius: 9999, paddingVertical: 14, alignItems: 'center', marginTop: 4 },
+  btnGuardarText:{ fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: '#e4ffe0', letterSpacing: 0.3 },
+  btnDisabled:  { opacity: 0.4 },
 
-  semanaCompact:    { gap: 8 },
-  semanaResumen:    { fontSize: 12, color: '#3A3530', fontWeight: '500' },
-  semanaDots:       { flexDirection: 'row', gap: 4 },
-  semanaDot:        { width: 8, height: 8, borderRadius: 4, backgroundColor: '#C4A86A' },
+  sectionHeader:{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 8 },
+  sectionTitle: { fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 24, color: '#31332c', letterSpacing: -0.4 },
+  sectionLink:  { fontFamily: 'Manrope_700Bold', fontSize: 13, color: '#3d6841' },
 
-  btnHistorial:     { backgroundColor: '#FDF8F0', borderWidth: 0.5, borderColor: '#E8D4A8', borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginBottom: 8 },
-  btnHistorialText: { fontSize: 11, fontWeight: '500', color: '#7A5A20' },
+  loadingBox:   { padding: 24, alignItems: 'center' },
+  emptyCard:    { backgroundColor: '#f5f4ed', borderRadius: 16, padding: 24, alignItems: 'center', gap: 8 },
+  emptyText:    { fontFamily: 'Manrope_400Regular', fontSize: 13, color: '#797c73', textAlign: 'center', lineHeight: 20 },
+
+  entradasGrid: { gap: 10 },
+  entradaCard:  { backgroundColor: '#ffffff', borderRadius: 16, padding: 18, gap: 10, shadowColor: 'rgba(103,94,77,1)', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 16, elevation: 2 },
+  entradaCardDestacada:{ backgroundColor: '#eee1cc' },
+  entradaHeader:{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  entradaFecha: { fontFamily: 'Manrope_700Bold', fontSize: 10, color: '#797c73', letterSpacing: 1.5 },
+  entradaTexto: { fontFamily: 'Manrope_400Regular', fontSize: 13, color: '#5e6058', lineHeight: 20 },
+  entradaTextoDestacada:{ fontFamily: 'PlusJakartaSans_700Bold', fontSize: 16, color: '#31332c', fontStyle: 'italic', lineHeight: 24, letterSpacing: -0.2 },
+
+  // Card compacta de "Semana pasada" — muestra solo la última entrada + contador
+  ultimaCard:   { backgroundColor: '#f5f4ed', borderRadius: 20, padding: 22, gap: 12 },
+  contadorRestante: { fontFamily: 'Manrope_600SemiBold', fontSize: 12, color: '#3d6841', marginTop: 4 },
+
+  capsulaCard:  { backgroundColor: '#eee1cc', borderRadius: 24, padding: 22, flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 8 },
+  capsulaTitle: { fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 20, color: '#595141', letterSpacing: -0.3 },
+  capsulaSub:   { fontFamily: 'Manrope_400Regular', fontSize: 12, color: '#635a4a', lineHeight: 18 },
+  capsulaTag:   { alignSelf: 'flex-start', backgroundColor: '#f8f0e3', borderRadius: 9999, paddingVertical: 4, paddingHorizontal: 10, marginTop: 6 },
+  capsulaTagText:{ fontFamily: 'Manrope_700Bold', fontSize: 9, color: '#5f5950', letterSpacing: 1.2 },
+  capsulaLock:  { width: 48, height: 48, borderRadius: 24, backgroundColor: '#675e4d', alignItems: 'center', justifyContent: 'center' },
 });

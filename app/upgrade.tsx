@@ -1,0 +1,242 @@
+/**
+ * Pantalla de upgrade a Senti+.
+ * Se abre desde cualquier feature bloqueada o desde ajustes.
+ * Por ahora muestra los precios y features — sin pago real todavía.
+ */
+
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { PRECIOS } from '../lib/premium';
+import { comprar, obtenerPackages, restaurarCompras } from '../lib/revenuecat';
+
+type Feature = {
+  icono: keyof typeof Ionicons.glyphMap;
+  titulo: string;
+  gratis: string;
+  premium: string;
+};
+
+const FEATURES: Feature[] = [
+  { icono: 'sparkles-outline',   titulo: 'Análisis con IA',       gratis: '1 al mes con Haiku',       premium: '4 al día con Sonnet' },
+  { icono: 'mic-outline',        titulo: 'Audios con voz',        gratis: '1 al día',                  premium: '10 al día' },
+  { icono: 'leaf-outline',       titulo: 'Plantas simultáneas',   gratis: '1 planta',                  premium: '3 plantas' },
+  { icono: 'flower-outline',     titulo: 'Especies de planta',    gratis: '5 especies',                premium: '13+ especies' },
+  { icono: 'mail-outline',       titulo: 'Cápsulas del tiempo',   gratis: '1 total',                   premium: 'Hasta 6 activas' },
+  { icono: 'analytics-outline',  titulo: 'Memoria de la IA',      gratis: 'Últimos 7 días',             premium: 'Patrones de meses' },
+  { icono: 'document-outline',   titulo: 'Exportar diario',       gratis: 'No disponible',             premium: 'PDF descargable' },
+  { icono: 'gift-outline',       titulo: 'Donación árbol real',   gratis: 'No disponible',             premium: 'Al cumplir 1 año' },
+];
+
+export default function UpgradeScreen() {
+  const router = useRouter();
+  const [comprando, setComprando] = useState(false);
+
+  async function handleComprar(tipo: 'mensual' | 'anual' | 'early') {
+    const packages = await obtenerPackages();
+    if (!packages) {
+      // RevenueCat no está configurado todavía
+      Alert.alert(
+        'Muy pronto',
+        'Los pagos estarán disponibles en el lanzamiento oficial de Senti. ¡Gracias por tu paciencia!',
+        [{ text: 'Entendido', style: 'default' }],
+      );
+      return;
+    }
+    setComprando(true);
+    try {
+      const ids: Record<typeof tipo, string> = {
+        mensual: 'com.sentiapp.plus.monthly',
+        anual:   'com.sentiapp.plus.annual',
+        early:   'com.sentiapp.plus.early',
+      };
+      const pkg = packages.find(p => p.product.identifier === ids[tipo]) ?? packages[0];
+      const ok = await comprar(pkg);
+      if (ok) {
+        Alert.alert('¡Bienvenida a Senti+!', 'Tu suscripción está activa.', [
+          { text: 'Continuar', onPress: () => router.back() },
+        ]);
+      }
+    } catch (e: any) {
+      Alert.alert('No se pudo completar', e?.message ?? 'Intenta de nuevo.');
+    } finally {
+      setComprando(false);
+    }
+  }
+
+  async function handleRestaurar() {
+    setComprando(true);
+    try {
+      const ok = await restaurarCompras();
+      Alert.alert(ok ? '¡Restaurado!' : 'Sin compras previas',
+        ok ? 'Tu Senti+ está activo.' : 'No encontramos compras anteriores con esta cuenta.');
+    } finally {
+      setComprando(false);
+    }
+  }
+
+  return (
+    <ScrollView style={S.container} contentContainerStyle={S.content}>
+
+      {/* Botón cerrar */}
+      <TouchableOpacity style={S.cerrar} onPress={() => router.back()} activeOpacity={0.7}>
+        <Ionicons name="close" size={22} color="#5e6058" />
+      </TouchableOpacity>
+
+      {/* Hero */}
+      <View style={S.hero}>
+        <Text style={S.heroLabel}>SENTI+</Text>
+        <Text style={S.heroTitle}>Más profundidad.{'\n'}Más de ti.</Text>
+        <Text style={S.heroSub}>
+          Senti gratis ya es poderoso. Senti+ es para quienes quieren ir más lejos.
+        </Text>
+      </View>
+
+      {/* Early adopter card */}
+      <View style={S.earlyCard}>
+        <View style={S.earlyTop}>
+          <View style={S.earlyBadge}>
+            <Text style={S.earlyBadgeText}>OFERTA EARLY ADOPTER</Text>
+          </View>
+          <Text style={S.earlyLimitado}>Solo 500 cupos</Text>
+        </View>
+        <Text style={S.earlyPrecio}>
+          ${PRECIOS.earlyAdopter_clp.toLocaleString('es-CL')} CLP
+          <Text style={S.earlyPeriodo}> / año</Text>
+        </Text>
+        <Text style={S.earlyDesc}>
+          Precio bloqueado de por vida. Sube cuando se agoten los cupos.
+        </Text>
+        <TouchableOpacity style={S.btnEarly} onPress={() => handleComprar('early')} activeOpacity={0.85} disabled={comprando}>
+          {comprando
+            ? <ActivityIndicator size="small" color="#1e4824" />
+            : <Text style={S.btnEarlyText}>Quiero mi lugar</Text>
+          }
+        </TouchableOpacity>
+      </View>
+
+      {/* Precios regulares */}
+      <View style={S.preciosRow}>
+        <TouchableOpacity style={S.precioCard} onPress={() => handleComprar('mensual')} activeOpacity={0.75} disabled={comprando}>
+          <Text style={S.precioLabel}>MENSUAL</Text>
+          <Text style={S.precioNum}>${PRECIOS.mensual_usd}</Text>
+          <Text style={S.precioSub}>USD / mes</Text>
+        </TouchableOpacity>
+        <View style={S.precioDivider} />
+        <TouchableOpacity style={S.precioCard} onPress={() => handleComprar('anual')} activeOpacity={0.75} disabled={comprando}>
+          <Text style={S.precioLabel}>ANUAL</Text>
+          <Text style={S.precioNum}>${PRECIOS.anual_usd}</Text>
+          <Text style={S.precioSub}>USD / año</Text>
+          <View style={S.ahorroChip}>
+            <Text style={S.ahorroText}>AHORRAS 33%</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+
+      {/* Comparación de features */}
+      <View style={S.seccionHeader}>
+        <Text style={S.seccionTitulo}>¿Qué incluye Senti+?</Text>
+      </View>
+
+      <View style={S.tablaHeader}>
+        <View style={{ flex: 1 }} />
+        <Text style={S.tablaColLabel}>GRATIS</Text>
+        <Text style={[S.tablaColLabel, { color: '#3d6841' }]}>SENTI+</Text>
+      </View>
+
+      <View style={S.featuresCard}>
+        {FEATURES.map((f, i) => (
+          <View key={f.titulo} style={[S.featureRow, i < FEATURES.length - 1 && S.featureRowBorder]}>
+            <View style={S.featureLeft}>
+              <View style={S.featureIconWrap}>
+                <Ionicons name={f.icono} size={16} color="#3d6841" />
+              </View>
+              <Text style={S.featureTitulo}>{f.titulo}</Text>
+            </View>
+            <Text style={S.featureGratis}>{f.gratis}</Text>
+            <Text style={S.featurePremium}>{f.premium}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Lo que nunca cambia */}
+      <View style={S.siempreCard}>
+        <Text style={S.siempreLabel}>SIEMPRE GRATIS, PARA SIEMPRE</Text>
+        <Text style={S.siempreTitulo}>Diario, gratitud y descarga ilimitados.</Text>
+        <Text style={S.siempreSub}>
+          Senti nunca te cobra por escribir o cuidarte. El plan gratuito es real, no un demo.
+        </Text>
+      </View>
+
+      {/* Restaurar compras */}
+      <TouchableOpacity style={S.restaurarBtn} onPress={handleRestaurar} activeOpacity={0.6} disabled={comprando}>
+        <Text style={S.restaurarText}>¿Ya eres Senti+? Restaurar compra</Text>
+      </TouchableOpacity>
+
+      <View style={{ height: 32 }} />
+
+    </ScrollView>
+  );
+}
+
+const S = StyleSheet.create({
+  container:  { flex: 1, backgroundColor: '#fbf9f4' },
+  content:    { paddingHorizontal: 24, paddingBottom: 48 },
+
+  cerrar:     { alignSelf: 'flex-end', paddingTop: 56, paddingBottom: 8 },
+
+  hero:       { gap: 10, paddingTop: 8, paddingBottom: 24 },
+  heroLabel:  { fontFamily: 'Manrope_700Bold', fontSize: 11, color: '#3d6841', letterSpacing: 2 },
+  heroTitle:  { fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 38, color: '#31332c', letterSpacing: -0.9, lineHeight: 44 },
+  heroSub:    { fontFamily: 'Manrope_400Regular', fontSize: 15, color: '#5e6058', lineHeight: 23 },
+
+  // Early adopter
+  earlyCard:  { backgroundColor: '#3d6841', borderRadius: 28, padding: 28, gap: 12, marginBottom: 16 },
+  earlyTop:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  earlyBadge: { backgroundColor: 'rgba(191,239,189,0.25)', borderRadius: 9999, paddingVertical: 5, paddingHorizontal: 12 },
+  earlyBadgeText: { fontFamily: 'Manrope_700Bold', fontSize: 9, color: '#bfefbd', letterSpacing: 1.5 },
+  earlyLimitado:  { fontFamily: 'Manrope_500Medium', fontSize: 12, color: 'rgba(228,255,224,0.6)' },
+  earlyPrecio:    { fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 40, color: '#e4ffe0', letterSpacing: -1, lineHeight: 46 },
+  earlyPeriodo:   { fontSize: 18, fontFamily: 'Manrope_400Regular', color: 'rgba(228,255,224,0.7)' },
+  earlyDesc:      { fontFamily: 'Manrope_400Regular', fontSize: 13, color: 'rgba(228,255,224,0.75)', lineHeight: 20 },
+  btnEarly:       { backgroundColor: '#bfefbd', borderRadius: 9999, paddingVertical: 15, alignItems: 'center', marginTop: 4 },
+  btnEarlyText:   { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: '#1e4824', letterSpacing: 0.3 },
+
+  // Precios regulares
+  preciosRow:   { flexDirection: 'row', backgroundColor: '#f5f4ed', borderRadius: 20, padding: 20, gap: 0, marginBottom: 32 },
+  precioCard:   { flex: 1, alignItems: 'center', gap: 4 },
+  precioDivider:{ width: 0.5, backgroundColor: '#d0d1c7', marginHorizontal: 16 },
+  precioLabel:  { fontFamily: 'Manrope_700Bold', fontSize: 9, color: '#797c73', letterSpacing: 1.5 },
+  precioNum:    { fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 28, color: '#31332c', letterSpacing: -0.5 },
+  precioSub:    { fontFamily: 'Manrope_400Regular', fontSize: 11, color: '#797c73' },
+  ahorroChip:   { backgroundColor: '#bfefbd', borderRadius: 9999, paddingVertical: 3, paddingHorizontal: 10, marginTop: 4 },
+  ahorroText:   { fontFamily: 'Manrope_700Bold', fontSize: 9, color: '#1e4824', letterSpacing: 1 },
+
+  // Features
+  seccionHeader: { marginBottom: 12 },
+  seccionTitulo: { fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 22, color: '#31332c', letterSpacing: -0.4 },
+
+  tablaHeader:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, marginBottom: 8 },
+  tablaColLabel:{ width: 90, fontFamily: 'Manrope_700Bold', fontSize: 9, color: '#797c73', letterSpacing: 1.2, textAlign: 'center' },
+
+  featuresCard: { backgroundColor: '#ffffff', borderRadius: 20, paddingHorizontal: 20, marginBottom: 20,
+    shadowColor: 'rgba(103,94,77,1)', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 16, elevation: 2 },
+  featureRow:   { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, gap: 8 },
+  featureRowBorder: { borderBottomWidth: 0.5, borderBottomColor: '#efeee6' },
+  featureLeft:  { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  featureIconWrap: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#bfefbd', alignItems: 'center', justifyContent: 'center' },
+  featureTitulo:{ fontFamily: 'Manrope_600SemiBold', fontSize: 13, color: '#31332c', flex: 1 },
+  featureGratis:{ width: 90, fontFamily: 'Manrope_400Regular', fontSize: 11, color: '#797c73', textAlign: 'center' },
+  featurePremium:{ width: 90, fontFamily: 'Manrope_700Bold', fontSize: 11, color: '#3d6841', textAlign: 'center' },
+
+  // Restaurar
+  restaurarBtn: { alignItems: 'center', paddingVertical: 16, marginTop: 8 },
+  restaurarText:{ fontFamily: 'Manrope_500Medium', fontSize: 13, color: '#797c73', textDecorationLine: 'underline' },
+
+  // Siempre gratis
+  siempreCard:  { backgroundColor: '#f5f4ed', borderRadius: 20, padding: 24, gap: 8 },
+  siempreLabel: { fontFamily: 'Manrope_700Bold', fontSize: 9, color: '#797c73', letterSpacing: 1.5 },
+  siempreTitulo:{ fontFamily: 'PlusJakartaSans_800ExtraBold', fontSize: 18, color: '#31332c', letterSpacing: -0.3, lineHeight: 24 },
+  siempreSub:   { fontFamily: 'Manrope_400Regular', fontSize: 13, color: '#5e6058', lineHeight: 20, marginTop: 2 },
+});

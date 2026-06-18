@@ -17,7 +17,13 @@
       "Bash(powershell.exe:*)",
       "Bash(curl:*)",
       "Bash(ls:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(Remove-Item \"c:\\\\Projects\\\\senti\\\\lib\\\\claude.ts\")",
+      "Bash(npx supabase *)"
+    ],
+    "additionalDirectories": [
+      "C:\\Projects\\reclamafacil",
+      "C:\\Users\\maau_\\OneDrive\\Escritorio\\PROYECTOS MACA\\web carta reclamo"
     ]
   }
 }

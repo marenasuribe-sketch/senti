@@ -25,13 +25,18 @@ export default function TabLayout() {
         tabBarInactiveTintColor: INACTIVE,
         tabBarStyle: {
           backgroundColor: 'rgba(251, 249, 244, 0.92)',
-          borderTopWidth: 0.5,
-          borderTopColor: '#e2e3d9',
+          borderTopWidth: 0,
           borderTopLeftRadius: 24,
           borderTopRightRadius: 24,
           height: 56 + insets.bottom,
           paddingBottom: insets.bottom,
           paddingTop: 6,
+          // Sombra tonal cálida (siguiendo el design system, no bordes)
+          shadowColor: 'rgba(103, 94, 77, 1)',
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.04,
+          shadowRadius: 20,
+          elevation: 8,
         },
         tabBarLabelStyle: {
           fontFamily: 'Manrope_500Medium',
@@ -53,12 +58,12 @@ export default function TabLayout() {
         options={{ title: 'Descarga', tabBarIcon: icon('cloud', 'cloud-outline') }}
       />
       <Tabs.Screen
-        name="estado"
-        options={{ title: 'Estado', tabBarIcon: icon('bar-chart', 'bar-chart-outline') }}
-      />
-      <Tabs.Screen
         name="journal"
         options={{ title: 'Diario', tabBarIcon: icon('book', 'book-outline') }}
+      />
+      <Tabs.Screen
+        name="estado"
+        options={{ title: 'Estado', tabBarIcon: icon('bar-chart', 'bar-chart-outline') }}
       />
     </Tabs>
   );
