@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, Alert, ActivityIndicator,
+  StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -9,39 +9,57 @@ import { supabase } from '../lib/supabase';
 import { crearCapsula, calcularFechaApertura, OPCIONES_DURACION, formatearFecha } from '../lib/capsulas';
 import { LIMITES_TEXTO, superaLimite } from '../lib/validation';
 import { obtenerPerfil } from '../lib/premium';
+import AvisoSenti, { AvisoConfig } from '../components/AvisoSenti';
 
 export default function CapsulaNewScreen() {
   const router = useRouter();
   const [texto, setTexto]       = useState('');
   const [meses, setMeses]       = useState<number | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [aviso, setAviso] = useState<AvisoConfig | null>(null);
 
   const fechaPreview = meses ? formatearFecha(calcularFechaApertura(meses).toISOString()) : null;
 
   async function handleSellar() {
     if (!texto.trim() || !meses) return;
     if (superaLimite(texto, 'capsula')) {
-      Alert.alert('Carta demasiado larga', `Máximo ${LIMITES_TEXTO.capsula} caracteres.`);
+      setAviso({
+        titulo: 'Carta demasiado larga',
+        mensaje: `Máximo ${LIMITES_TEXTO.capsula} caracteres. Quédate con lo esencial.`,
+        icono: 'create-outline',
+      });
       return;
     }
     setGuardando(true);
     const { data: { session } } = await supabase.auth.getSession();
     const userId = session?.user?.id;
-    if (!userId) { Alert.alert('Error', 'No hay sesión activa.'); setGuardando(false); return; }
+    if (!userId) {
+      setAviso({
+        titulo: 'No hay sesión activa',
+        mensaje: 'Vuelve a iniciar sesión para sellar tu cápsula.',
+        icono: 'alert-circle-outline',
+      });
+      setGuardando(false);
+      return;
+    }
 
     const perfil = await obtenerPerfil(supabase, userId);
     const { error } = await crearCapsula(supabase, userId, texto.trim(), meses, perfil.es_premium);
     if (error === 'LIMITE_CAPSULAS_GRATIS') {
-      Alert.alert(
-        'Ya tienes una cápsula sellada',
-        'El plan gratuito incluye 1 cápsula activa. Con Senti+ puedes tener hasta 6 al mismo tiempo.',
-        [{ text: 'Cerrar', style: 'cancel' }, { text: 'Ver Senti+', onPress: () => router.push('/upgrade') }],
-      );
+      setAviso({
+        titulo: 'Ya tienes una cápsula sellada',
+        mensaje: 'El plan gratuito incluye 1 cápsula activa. Con Senti+ puedes tener hasta 6 al mismo tiempo.',
+        icono: 'lock-closed', iconoBg: '#eee1cc', iconoColor: '#595141',
+        botones: [
+          { texto: 'Conocer Senti+', variante: 'primario', onPress: () => router.push('/upgrade') },
+          { texto: 'Ahora no', variante: 'secundario' },
+        ],
+      });
       setGuardando(false);
       return;
     }
     if (error) {
-      Alert.alert('No se pudo sellar', error);
+      setAviso({ titulo: 'No se pudo sellar', mensaje: error, icono: 'alert-circle-outline' });
       setGuardando(false);
       return;
     }
@@ -126,6 +144,8 @@ export default function CapsulaNewScreen() {
       </TouchableOpacity>
 
       <Text style={S.nota}>Una vez sellada no podrás editarla. Solo la leerás cuando llegue el momento.</Text>
+
+      <AvisoSenti aviso={aviso} onClose={() => setAviso(null)} />
 
     </ScrollView>
   );
