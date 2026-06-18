@@ -1,100 +1,88 @@
 -- ============================================================================
--- RLS (Row-Level Security) para Senti
+-- RLS (Row-Level Security) para Senti — RESET LIMPIO
 -- ----------------------------------------------------------------------------
 -- Objetivo: que cada usuario SOLO pueda ver y modificar sus propios datos.
--- Sin esto, cualquiera con la anon key (que es pública) puede leer/modificar
--- el diario, gratitudes y cápsulas de OTROS usuarios via la API REST directa.
 --
--- Es idempotente: se puede correr varias veces sin romper nada.
--- Aplicar en Supabase → SQL Editor, o con `supabase db push`.
+-- Por qué un "reset": el proyecto tenía policies mezcladas, incluyendo
+-- policies "acceso_total" (using true / check true) en gratitudes, journal y
+-- plantas_usuario que ANULABAN la protección — cualquiera podía ver datos de
+-- otros usuarios. Postgres combina policies con OR, así que una sola policy
+-- "true" deja pasar todo aunque haya otra que filtre por user_id.
 --
--- Nota: user_id está tipado como TEXT en estas tablas, por eso comparamos
--- contra auth.uid()::text.
+-- Este script borra TODAS las policies de cada tabla y crea un set único y
+-- correcto. Es idempotente: se puede correr varias veces sin romper nada.
+--
+-- Aplicar en Supabase → SQL Editor → pegar todo → Run.
+--
+-- Nota: user_id es TEXT en estas tablas, por eso comparamos auth.uid()::text.
 -- ============================================================================
 
--- Helper para no repetir: activa RLS + policy "solo lo mío" en tablas simples.
--- (Lo hacemos explícito tabla por tabla para que quede legible y versionado.)
+-- 1. Borrar TODAS las policies existentes de las 7 tablas (limpia duplicados
+--    y la peligrosa "acceso_total").
+do $$
+declare
+  r record;
+begin
+  for r in
+    select policyname, tablename
+    from pg_policies
+    where schemaname = 'public'
+      and tablename in (
+        'gratitudes', 'journal', 'plantas_usuario', 'capsulas',
+        'logros_usuario', 'consejos_guardados', 'perfiles'
+      )
+  loop
+    execute format('drop policy if exists %I on public.%I', r.policyname, r.tablename);
+  end loop;
+end $$;
 
--- ─── gratitudes ─────────────────────────────────────────────────────────────
-alter table public.gratitudes enable row level security;
-drop policy if exists "gratitudes propias" on public.gratitudes;
-create policy "gratitudes propias" on public.gratitudes
-  for all
-  using (auth.uid()::text = user_id)
-  with check (auth.uid()::text = user_id);
-
--- ─── journal ────────────────────────────────────────────────────────────────
-alter table public.journal enable row level security;
-drop policy if exists "journal propio" on public.journal;
-create policy "journal propio" on public.journal
-  for all
-  using (auth.uid()::text = user_id)
-  with check (auth.uid()::text = user_id);
-
--- ─── plantas_usuario ────────────────────────────────────────────────────────
-alter table public.plantas_usuario enable row level security;
-drop policy if exists "planta propia" on public.plantas_usuario;
-create policy "planta propia" on public.plantas_usuario
-  for all
-  using (auth.uid()::text = user_id)
-  with check (auth.uid()::text = user_id);
-
--- ─── capsulas ───────────────────────────────────────────────────────────────
-alter table public.capsulas enable row level security;
-drop policy if exists "capsulas propias" on public.capsulas;
-create policy "capsulas propias" on public.capsulas
-  for all
-  using (auth.uid()::text = user_id)
-  with check (auth.uid()::text = user_id);
-
--- ─── logros_usuario ─────────────────────────────────────────────────────────
-alter table public.logros_usuario enable row level security;
-drop policy if exists "logros propios" on public.logros_usuario;
-create policy "logros propios" on public.logros_usuario
-  for all
-  using (auth.uid()::text = user_id)
-  with check (auth.uid()::text = user_id);
-
--- ─── consejos_guardados ─────────────────────────────────────────────────────
+-- 2. Asegurar RLS activado en todas.
+alter table public.gratitudes        enable row level security;
+alter table public.journal           enable row level security;
+alter table public.plantas_usuario   enable row level security;
+alter table public.capsulas          enable row level security;
+alter table public.logros_usuario    enable row level security;
 alter table public.consejos_guardados enable row level security;
-drop policy if exists "consejos propios" on public.consejos_guardados;
+alter table public.perfiles          enable row level security;
+
+-- 3. Policies "solo lo mío" (una por tabla, cubre SELECT/INSERT/UPDATE/DELETE).
+--    Casteamos AMBOS lados a text porque user_id es uuid en unas tablas
+--    (perfiles, capsulas) y text en otras (journal, gratitudes).
+create policy "gratitudes propias" on public.gratitudes
+  for all using ((auth.uid())::text = (user_id)::text) with check ((auth.uid())::text = (user_id)::text);
+
+create policy "journal propio" on public.journal
+  for all using ((auth.uid())::text = (user_id)::text) with check ((auth.uid())::text = (user_id)::text);
+
+create policy "planta propia" on public.plantas_usuario
+  for all using ((auth.uid())::text = (user_id)::text) with check ((auth.uid())::text = (user_id)::text);
+
+create policy "capsulas propias" on public.capsulas
+  for all using ((auth.uid())::text = (user_id)::text) with check ((auth.uid())::text = (user_id)::text);
+
+create policy "logros propios" on public.logros_usuario
+  for all using ((auth.uid())::text = (user_id)::text) with check ((auth.uid())::text = (user_id)::text);
+
 create policy "consejos propios" on public.consejos_guardados
-  for all
-  using (auth.uid()::text = user_id)
-  with check (auth.uid()::text = user_id);
+  for all using ((auth.uid())::text = (user_id)::text) with check ((auth.uid())::text = (user_id)::text);
 
--- ─── perfiles (caso especial: es_premium NO lo puede tocar el usuario) ───────
--- El usuario puede leer su perfil, crearlo, y actualizar su intake — pero
--- es_premium / premium_desde / premium_hasta solo los escribe el webhook de
--- RevenueCat con service_role (que SALTA RLS y los grants de columna).
-alter table public.perfiles enable row level security;
-
-drop policy if exists "perfil propio lectura" on public.perfiles;
+-- 4. perfiles: el usuario lee y crea SU perfil, pero NO lo actualiza.
+--    Todas las columnas editables (es_premium, premium_desde, premium_hasta)
+--    solo las escribe el webhook de RevenueCat con service_role.
 create policy "perfil propio lectura" on public.perfiles
-  for select using (auth.uid()::text = user_id);
+  for select using ((auth.uid())::text = (user_id)::text);
 
-drop policy if exists "perfil propio insertar" on public.perfiles;
 create policy "perfil propio insertar" on public.perfiles
-  for insert with check (auth.uid()::text = user_id);
+  for insert with check ((auth.uid())::text = (user_id)::text);
 
-drop policy if exists "perfil propio actualizar" on public.perfiles;
-create policy "perfil propio actualizar" on public.perfiles
-  for update
-  using (auth.uid()::text = user_id)
-  with check (auth.uid()::text = user_id);
-
--- Defensa real contra auto-asignarse premium: privilegios a nivel de columna.
--- Al rol `authenticated` (usuarios logueados desde la app) le quitamos UPDATE
--- sobre toda la tabla y se lo devolvemos SOLO en las columnas no sensibles.
--- service_role no se ve afectado: ignora estos grants y RLS por completo.
+-- 5. Blindaje contra auto-asignarse premium: el usuario no puede UPDATE perfiles.
+--    (No hay ninguna columna que deba poder editar — todas son del webhook.)
+--    service_role ignora este revoke y sigue pudiendo actualizar es_premium.
 revoke update on public.perfiles from authenticated;
-grant  update (intake) on public.perfiles to authenticated;
--- Si agregas más columnas editables por el usuario, añádelas arriba.
 
 -- ============================================================================
--- Verificación rápida (opcional): listar el estado de RLS por tabla
---   select relname, relrowsecurity from pg_class
---   where relname in ('gratitudes','journal','plantas_usuario','capsulas',
---                     'logros_usuario','consejos_guardados','perfiles');
--- relrowsecurity debe ser true en todas.
+-- Verificación (correr después): no debe quedar ninguna policy con qual='true'
+--   select tablename, policyname, qual, with_check from pg_policies
+--   where schemaname='public' and (qual = 'true' or with_check = 'true');
+-- Debe devolver 0 filas.
 -- ============================================================================
