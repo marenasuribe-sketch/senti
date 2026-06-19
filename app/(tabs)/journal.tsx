@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  ActivityIndicator, StyleSheet, Alert, KeyboardAvoidingView, Platform,
+  ActivityIndicator, StyleSheet, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -15,6 +15,7 @@ import { usePremium } from '../../hooks/usePremium';
 import CelebracionEtapa from '../../components/CelebracionEtapa';
 import LogroModal from '../../components/LogroModal';
 import SentiLogo from '../../components/SentiLogo';
+import AvisoSenti, { AvisoConfig } from '../../components/AvisoSenti';
 
 type PillTipo = 'warm' | 'mist' | 'sage';
 
@@ -63,16 +64,21 @@ export default function JournalScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [consejoGuardado, setConsejoGuardado] = useState(false);
+  const [aviso, setAviso] = useState<AvisoConfig | null>(null);
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
   async function handleMic() {
     if (!esPremium) {
-      Alert.alert(
-        'Audio en el Diario',
-        'Con Senti+ puedes hablar directamente en tu diario. ¿Quieres conocer el plan?',
-        [{ text: 'Ahora no', style: 'cancel' }, { text: 'Ver Senti+', onPress: () => router.push('/upgrade') }],
-      );
+      setAviso({
+        titulo: 'Audio en el Diario',
+        mensaje: 'Con Senti+ puedes hablar directamente en tu diario. ¿Quieres conocer el plan?',
+        icono: 'lock-closed', iconoBg: '#eee1cc', iconoColor: '#595141',
+        botones: [
+          { texto: 'Conocer Senti+', variante: 'primario', onPress: () => router.push('/upgrade') },
+          { texto: 'Ahora no', variante: 'secundario' },
+        ],
+      });
       return;
     }
     if (isRecording) {
@@ -89,14 +95,14 @@ export default function JournalScreen() {
         setText(prev => prev.trim() ? `${prev.trim()}\n${t}` : t);
       } catch (e: any) {
         const msg = e?.message ?? String(e);
-        if (msg === 'LIMITE_AUDIO_GRATIS') Alert.alert('Límite de audio', 'Ya usaste tu audio de hoy.');
-        else if (msg === 'LIMITE_AUDIO_PREMIUM') Alert.alert('Límite de audio', 'Ya usaste tus 10 audios de hoy.');
-        else Alert.alert('Error al transcribir', msg);
+        if (msg === 'LIMITE_AUDIO_GRATIS') setAviso({ titulo: 'Límite de audio', mensaje: 'Ya usaste tu audio de hoy.', icono: 'time-outline' });
+        else if (msg === 'LIMITE_AUDIO_PREMIUM') setAviso({ titulo: 'Límite de audio', mensaje: 'Ya usaste tus 10 audios de hoy.', icono: 'time-outline' });
+        else setAviso({ titulo: 'No se pudo transcribir', mensaje: msg, icono: 'alert-circle-outline' });
       } finally { setTranscribing(false); }
     } else {
       // Iniciar grabación
       const { granted } = await AudioModule.requestRecordingPermissionsAsync();
-      if (!granted) { Alert.alert('Permiso denegado', 'Senti necesita acceso al micrófono.'); return; }
+      if (!granted) { setAviso({ titulo: 'Permiso denegado', mensaje: 'Senti necesita acceso al micrófono para grabar tu voz.', icono: 'mic-off-outline' }); return; }
       await recorder.prepareToRecordAsync();
       recorder.record();
       setIsRecording(true);
@@ -106,11 +112,15 @@ export default function JournalScreen() {
   async function handleGuardarConsejo() {
     if (!result?.consejo) return;
     if (!esPremium) {
-      Alert.alert(
-        'Consejos guardados',
-        'Con Senti+ puedes guardar los consejos de tu diario y releerlos cuando quieras.',
-        [{ text: 'Cerrar', style: 'cancel' }, { text: 'Ver Senti+', onPress: () => router.push('/upgrade') }],
-      );
+      setAviso({
+        titulo: 'Consejos guardados',
+        mensaje: 'Con Senti+ puedes guardar los consejos de tu diario y releerlos cuando quieras.',
+        icono: 'lock-closed', iconoBg: '#eee1cc', iconoColor: '#595141',
+        botones: [
+          { texto: 'Conocer Senti+', variante: 'primario', onPress: () => router.push('/upgrade') },
+          { texto: 'Ahora no', variante: 'secundario' },
+        ],
+      });
       return;
     }
     const { data: { session } } = await supabase.auth.getSession();
@@ -126,12 +136,12 @@ export default function JournalScreen() {
   }
 
   async function handleAnalizar() {
-    if (text.trim().length < 10) { Alert.alert('Escribe un poco más', 'Cuéntame cómo te sientes hoy.'); return; }
+    if (text.trim().length < 10) { setAviso({ titulo: 'Escribe un poco más', mensaje: 'Cuéntame cómo te sientes hoy.', icono: 'create-outline' }); return; }
     setLoading(true); setResult(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
-      if (!userId || !session) { Alert.alert('Error', 'No hay sesión activa.'); setLoading(false); return; }
+      if (!userId || !session) { setAviso({ titulo: 'No hay sesión activa', mensaje: 'Vuelve a iniciar sesión para analizar tu diario.', icono: 'alert-circle-outline' }); setLoading(false); return; }
 
       const analysis = await analyzeWithClaude(text, session);
 
@@ -163,19 +173,19 @@ export default function JournalScreen() {
     } catch (e: any) {
       const msg = e?.message ?? String(e);
       if (msg === 'LIMITE_DIA') {
-        Alert.alert(
-          'Ya reflexionaste hoy',
-          'El plan gratuito incluye 1 análisis al día. Vuelve mañana, o pasa a Senti+ para 4 al mes.',
-          [{ text: 'Cerrar', style: 'cancel' }, { text: 'Ver Senti+', onPress: () => router.push('/upgrade') }],
-        );
+        setAviso({
+          titulo: 'Ya reflexionaste hoy',
+          mensaje: 'El plan gratuito incluye 1 análisis al día. Vuelve mañana, o pasa a Senti+ para 4 al mes.',
+          icono: 'lock-closed', iconoBg: '#eee1cc', iconoColor: '#595141',
+          botones: [
+            { texto: 'Conocer Senti+', variante: 'primario', onPress: () => router.push('/upgrade') },
+            { texto: 'Ahora no', variante: 'secundario' },
+          ],
+        });
       } else if (msg === 'LIMITE_MES') {
-        Alert.alert(
-          'Límite mensual alcanzado',
-          'Usaste tus 4 análisis de Senti+ este mes. Se renuevan el próximo mes.',
-          [{ text: 'Entendido' }],
-        );
+        setAviso({ titulo: 'Límite mensual alcanzado', mensaje: 'Usaste tus 4 análisis de Senti+ este mes. Se renuevan el próximo mes.', icono: 'time-outline' });
       } else {
-        Alert.alert('Algo salió mal', msg);
+        setAviso({ titulo: 'Algo salió mal', mensaje: msg, icono: 'alert-circle-outline' });
       }
     }
     finally { setLoading(false); }
@@ -370,6 +380,7 @@ export default function JournalScreen() {
         />
       )}
       <LogroModal logro={logros[logroIdx] ?? null} onClose={cerrarLogro} />
+      <AvisoSenti aviso={aviso} onClose={() => setAviso(null)} />
     </ScrollView>
     </KeyboardAvoidingView>
   );

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  ActivityIndicator, StyleSheet, Alert,
+  ActivityIndicator, StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -15,6 +15,7 @@ import { usePremium } from '../../hooks/usePremium';
 import SentiLogo from '../../components/SentiLogo';
 import CelebracionEtapa from '../../components/CelebracionEtapa';
 import LogroModal from '../../components/LogroModal';
+import AvisoSenti, { AvisoConfig } from '../../components/AvisoSenti';
 
 type Gratitud = { id: string; texto: string; created_at: string };
 type Campo = 'momento' | 'persona' | 'victoria';
@@ -58,6 +59,7 @@ export default function GratitudScreen() {
   const [semana, setSemana]     = useState<Gratitud[]>([]);
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  const [aviso, setAviso] = useState<AvisoConfig | null>(null);
   const [racha, setRacha]       = useState(0);
   const [grabandoCampo, setGrabandoCampo] = useState<Campo | null>(null);
   const [transcribing, setTranscribing]   = useState(false);
@@ -91,11 +93,15 @@ export default function GratitudScreen() {
 
   async function handleMic(campo: Campo) {
     if (!esPremium) {
-      Alert.alert(
-        'Audio en Gratitud',
-        'Con Senti+ puedes dictar tus gratitudes por voz en cualquier campo.',
-        [{ text: 'Cerrar', style: 'cancel' }, { text: 'Ver Senti+', onPress: () => router.push('/upgrade') }],
-      );
+      setAviso({
+        titulo: 'Audio en Gratitud',
+        mensaje: 'Con Senti+ puedes dictar tus gratitudes por voz en cualquier campo.',
+        icono: 'lock-closed', iconoBg: '#eee1cc', iconoColor: '#595141',
+        botones: [
+          { texto: 'Conocer Senti+', variante: 'primario', onPress: () => router.push('/upgrade') },
+          { texto: 'Ahora no', variante: 'secundario' },
+        ],
+      });
       return;
     }
     if (grabandoCampo === campo) {
@@ -114,9 +120,9 @@ export default function GratitudScreen() {
       } catch (e: any) {
         const msg = e?.message ?? String(e);
         if (msg === 'LIMITE_AUDIO_GRATIS' || msg === 'LIMITE_AUDIO_PREMIUM') {
-          Alert.alert('Límite de audio', 'Ya usaste todos tus audios de hoy.');
+          setAviso({ titulo: 'Límite de audio', mensaje: 'Ya usaste todos tus audios de hoy.', icono: 'time-outline' });
         } else {
-          Alert.alert('Error al transcribir', msg);
+          setAviso({ titulo: 'No se pudo transcribir', mensaje: msg, icono: 'alert-circle-outline' });
         }
       } finally { setTranscribing(false); }
     } else {
@@ -125,7 +131,7 @@ export default function GratitudScreen() {
         await recorder.stop(); // parar el campo anterior si hay
       }
       const { granted } = await AudioModule.requestRecordingPermissionsAsync();
-      if (!granted) { Alert.alert('Permiso denegado', 'Senti necesita acceso al micrófono.'); return; }
+      if (!granted) { setAviso({ titulo: 'Permiso denegado', mensaje: 'Senti necesita acceso al micrófono para grabar tu voz.', icono: 'mic-off-outline' }); return; }
       await recorder.prepareToRecordAsync();
       recorder.record();
       setGrabandoCampo(campo);
@@ -135,14 +141,14 @@ export default function GratitudScreen() {
   async function guardar() {
     if (!momento.trim() && !persona.trim() && !victoria.trim()) return;
     if (superaLimite(momento, 'gratitud') || superaLimite(persona, 'gratitud') || superaLimite(victoria, 'gratitud')) {
-      Alert.alert('Texto demasiado largo', `Cada campo tiene un máximo de ${LIMITES_TEXTO.gratitud} caracteres.`);
+      setAviso({ titulo: 'Texto demasiado largo', mensaje: `Cada campo tiene un máximo de ${LIMITES_TEXTO.gratitud} caracteres.`, icono: 'create-outline' });
       return;
     }
     setGuardando(true);
 
     const { data: { session } } = await supabase.auth.getSession();
     const userId = session?.user?.id;
-    if (!userId) { Alert.alert('Error', 'No hay sesión activa.'); setGuardando(false); return; }
+    if (!userId) { setAviso({ titulo: 'No hay sesión activa', mensaje: 'Vuelve a iniciar sesión para guardar tus gratitudes.', icono: 'alert-circle-outline' }); setGuardando(false); return; }
 
     const partes: string[] = [];
     if (momento.trim())  partes.push(`Momento: ${momento.trim()}`);
@@ -154,7 +160,7 @@ export default function GratitudScreen() {
       .insert({ user_id: userId, texto: textoGuardar })
       .select('*').single();
 
-    if (error) { Alert.alert('Error', error.message); }
+    if (error) { setAviso({ titulo: 'No se pudo guardar', mensaje: error.message, icono: 'alert-circle-outline' }); }
     else if (data) {
       const updated = [data, ...todas];
       setTodas(updated); setRacha(calcularRacha(updated));
@@ -362,6 +368,7 @@ export default function GratitudScreen() {
         />
       )}
       <LogroModal logro={logros[logroIdx] ?? null} onClose={cerrarLogro} />
+      <AvisoSenti aviso={aviso} onClose={() => setAviso(null)} />
     </ScrollView>
   );
 }

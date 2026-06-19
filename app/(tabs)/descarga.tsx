@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  ActivityIndicator, StyleSheet, Alert, KeyboardAvoidingView, Platform,
+  ActivityIndicator, StyleSheet, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAudioRecorder, AudioModule, RecordingPresets } from 'expo-audio';
@@ -10,6 +10,7 @@ import { supabase } from '../../lib/supabase';
 import { transcribirAudio } from '../../lib/edge';
 import { sumarGotas } from '../../lib/planta';
 import { LIMITES_TEXTO, superaLimite } from '../../lib/validation';
+import AvisoSenti, { AvisoConfig } from '../../components/AvisoSenti';
 import { verificarLogros, type Logro } from '../../lib/logros';
 import CelebracionEtapa from '../../components/CelebracionEtapa';
 import LogroModal from '../../components/LogroModal';
@@ -31,6 +32,7 @@ export default function DescargaScreen() {
   const [tagsSel, setTagsSel]         = useState<string[]>([]);
   const [guardando, setGuardando]     = useState(false);
   const [guardado, setGuardado]       = useState(false);
+  const [aviso, setAviso]             = useState<AvisoConfig | null>(null);
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording]   = useState(false);
@@ -47,11 +49,11 @@ export default function DescargaScreen() {
   async function startRecording() {
     try {
       const { granted } = await AudioModule.requestRecordingPermissionsAsync();
-      if (!granted) { Alert.alert('Permiso denegado', 'Senti necesita acceso al micrófono.'); return; }
+      if (!granted) { setAviso({ titulo: 'Permiso denegado', mensaje: 'Senti necesita acceso al micrófono para grabar tu voz.', icono: 'mic-off-outline' }); return; }
       await recorder.prepareToRecordAsync();
       recorder.record();
       setIsRecording(true);
-    } catch (e) { Alert.alert('Error', 'No se pudo iniciar la grabación: ' + String(e)); }
+    } catch (e) { setAviso({ titulo: 'No se pudo grabar', mensaje: String(e), icono: 'alert-circle-outline' }); }
   }
 
   async function stopRecording() {
@@ -70,12 +72,19 @@ export default function DescargaScreen() {
     } catch (e: any) {
       const msg = e?.message ?? String(e);
       if (msg === 'LIMITE_AUDIO_GRATIS') {
-        Alert.alert('Ya usaste tu audio de hoy', 'En el plan gratuito tienes 1 audio al día. Vuelve mañana o escribe directamente.',
-          [{ text: 'Entendido', style: 'cancel' }, { text: 'Ver Senti+', onPress: () => router.push('/upgrade') }]);
+        setAviso({
+          titulo: 'Ya usaste tu audio de hoy',
+          mensaje: 'En el plan gratuito tienes 1 audio al día. Vuelve mañana o escribe directamente.',
+          icono: 'lock-closed', iconoBg: '#eee1cc', iconoColor: '#595141',
+          botones: [
+            { texto: 'Conocer Senti+', variante: 'primario', onPress: () => router.push('/upgrade') },
+            { texto: 'Ahora no', variante: 'secundario' },
+          ],
+        });
       } else if (msg === 'LIMITE_AUDIO_PREMIUM') {
-        Alert.alert('Límite del día', 'Ya usaste tus 10 audios de hoy. Vuelven mañana.');
+        setAviso({ titulo: 'Límite del día', mensaje: 'Ya usaste tus 10 audios de hoy. Vuelven mañana.', icono: 'time-outline' });
       } else {
-        Alert.alert('Error al transcribir', msg);
+        setAviso({ titulo: 'No se pudo transcribir', mensaje: msg, icono: 'alert-circle-outline' });
       }
     }
     finally { setTranscribing(false); }
@@ -84,13 +93,13 @@ export default function DescargaScreen() {
   async function soltar() {
     if (!texto.trim()) return;
     if (superaLimite(texto, 'descarga')) {
-      Alert.alert('Texto demasiado largo', `Máximo ${LIMITES_TEXTO.descarga} caracteres.`);
+      setAviso({ titulo: 'Texto demasiado largo', mensaje: `Máximo ${LIMITES_TEXTO.descarga} caracteres.`, icono: 'create-outline' });
       return;
     }
     setGuardando(true);
     const { data: { session } } = await supabase.auth.getSession();
     const userId = session?.user?.id;
-    if (!userId) { Alert.alert('Error', 'No hay sesión activa.'); setGuardando(false); return; }
+    if (!userId) { setAviso({ titulo: 'No hay sesión activa', mensaje: 'Vuelve a iniciar sesión para guardar.', icono: 'alert-circle-outline' }); setGuardando(false); return; }
 
     const tagsLine = tagsSel.length ? `[${tagsSel.join(', ')}]\n\n` : '';
     const textoGuardar = tagsLine + texto.trim();
@@ -102,7 +111,7 @@ export default function DescargaScreen() {
       via_audio: usedAudio,
       tags: tagsSel.length ? tagsSel : null,
     });
-    if (error) { Alert.alert('Error', error.message); setGuardando(false); return; }
+    if (error) { setAviso({ titulo: 'No se pudo guardar', mensaje: error.message, icono: 'alert-circle-outline' }); setGuardando(false); return; }
 
     const sumar = await sumarGotas(supabase, userId, 2);
     if (sumar.subio) {
@@ -295,6 +304,7 @@ export default function DescargaScreen() {
         </View>
 
       </View>
+      <AvisoSenti aviso={aviso} onClose={() => setAviso(null)} />
     </ScrollView>
     </KeyboardAvoidingView>
   );
