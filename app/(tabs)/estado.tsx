@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Alert, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import SentiLogo from '../../components/SentiLogo';
+import AvisoSenti, { AvisoConfig } from '../../components/AvisoSenti';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Path, Defs, LinearGradient, Stop, Line } from 'react-native-svg';
 import { supabase } from '../../lib/supabase';
@@ -123,6 +124,7 @@ export default function EstadoScreen() {
     Array.from({ length: 7 }, () => ({ journals: 0, gratitudes: 0, estres: 0, calma: 0, energia: 0, hasData: false }))
   );
   const [memIdx, setMemIdx] = useState(0);
+  const [aviso, setAviso] = useState<AvisoConfig | null>(null);
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
   useFocusEffect(useCallback(() => { cargar(); }, []));
@@ -147,22 +149,23 @@ export default function EstadoScreen() {
   }, [fadeAnim]);
 
   function cerrarSesion() {
-    Alert.alert(
-      'Cerrar sesión',
-      '¿Quieres cerrar sesión? Volverás al inicio.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
+    setAviso({
+      titulo: 'Cerrar sesión',
+      mensaje: '¿Quieres cerrar sesión? Volverás al inicio.',
+      icono: 'log-out-outline',
+      botones: [
         {
-          text: 'Cerrar sesión',
-          style: 'destructive',
+          texto: 'Cerrar sesión',
+          variante: 'primario',
           onPress: async () => {
             await AsyncStorage.removeItem('onboarding_complete');
             await AsyncStorage.removeItem('senti_intake');
             await supabase.auth.signOut();
           },
         },
-      ]
-    );
+        { texto: 'Cancelar', variante: 'secundario' },
+      ],
+    });
   }
 
   async function cargar() {
@@ -557,6 +560,7 @@ export default function EstadoScreen() {
         </TouchableOpacity>
 
       </View>
+      <AvisoSenti aviso={aviso} onClose={() => setAviso(null)} />
     </ScrollView>
   );
 }

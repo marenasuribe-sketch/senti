@@ -1,24 +1,26 @@
 import { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { signInWithGoogle } from '../../lib/auth';
 import SentiLogo from '../../components/SentiLogo';
+import AvisoSenti, { AvisoConfig } from '../../components/AvisoSenti';
 
 export default function WelcomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
+  const [aviso, setAviso] = useState<AvisoConfig | null>(null);
 
   async function handleGoogle() {
     setLoading(true);
     const { error } = await signInWithGoogle();
     setLoading(false);
-    if (error) Alert.alert('Error al iniciar sesión', error);
+    if (error) setAviso({ titulo: 'Error al iniciar sesión', mensaje: error, icono: 'alert-circle-outline' });
   }
 
   return (
@@ -89,6 +91,7 @@ export default function WelcomeScreen() {
         </View>
 
       </View>
+      <AvisoSenti aviso={aviso} onClose={() => setAviso(null)} />
     </View>
   );
 }

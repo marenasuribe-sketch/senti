@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../lib/supabase';
 import { PLANTAS_PREMIUM } from '../../lib/planta';
 import { usePremium } from '../../hooks/usePremium';
+import AvisoSenti, { AvisoConfig } from '../../components/AvisoSenti';
 
 const PLANTAS = [
   {
@@ -130,6 +131,7 @@ export default function PlantaOnboardingScreen() {
   const [idx, setIdx] = useState(0);
   const [confirmado, setConfirmado] = useState<string | null>(null);
   const [guardando, setGuardando]   = useState(false);
+  const [aviso, setAviso]           = useState<AvisoConfig | null>(null);
 
   const planta = PLANTAS[idx];
   const seleccionada = confirmado === planta.id;
@@ -145,7 +147,7 @@ export default function PlantaOnboardingScreen() {
 
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
-      Alert.alert('Error', 'No hay sesión activa. Vuelve a iniciar sesión.');
+      setAviso({ titulo: 'No hay sesión activa', mensaje: 'Vuelve a iniciar sesión para elegir tu planta.', icono: 'alert-circle-outline' });
       setGuardando(false);
       return;
     }
@@ -156,7 +158,7 @@ export default function PlantaOnboardingScreen() {
     );
 
     if (error) {
-      Alert.alert('Error al guardar', error.message);
+      setAviso({ titulo: 'No se pudo guardar', mensaje: error.message, icono: 'alert-circle-outline' });
       setGuardando(false);
       return;
     }
@@ -268,6 +270,7 @@ export default function PlantaOnboardingScreen() {
         </View>
 
       </View>
+      <AvisoSenti aviso={aviso} onClose={() => setAviso(null)} />
     </View>
   );
 }

@@ -11,8 +11,9 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
-  StyleSheet, ActivityIndicator, Alert,
+  StyleSheet, ActivityIndicator,
 } from 'react-native';
+import AvisoSenti, { AvisoConfig } from '../components/AvisoSenti';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { supabase } from '../lib/supabase';
@@ -89,6 +90,7 @@ export default function ExportarDiarioScreen() {
   const [cargando, setCargando]   = useState(true);
   const [exportando, setExportando] = useState(false);
   const [filtro, setFiltro]       = useState<'todo' | 'diario' | 'descarga'>('todo');
+  const [aviso, setAviso]         = useState<AvisoConfig | null>(null);
 
   useEffect(() => {
     async function cargar() {
@@ -107,11 +109,15 @@ export default function ExportarDiarioScreen() {
 
   async function exportar() {
     if (!esPremium) {
-      Alert.alert(
-        'Exportar Diario',
-        'La exportación a PDF es una función de Senti+.',
-        [{ text: 'Cerrar', style: 'cancel' }, { text: 'Ver Senti+', onPress: () => router.push('/upgrade') }],
-      );
+      setAviso({
+        titulo: 'Exportar Diario',
+        mensaje: 'La exportación a PDF es una función de Senti+.',
+        icono: 'lock-closed', iconoBg: '#eee1cc', iconoColor: '#595141',
+        botones: [
+          { texto: 'Conocer Senti+', variante: 'primario', onPress: () => router.push('/upgrade') },
+          { texto: 'Ahora no', variante: 'secundario' },
+        ],
+      });
       return;
     }
 
@@ -128,7 +134,7 @@ export default function ExportarDiarioScreen() {
       });
 
       if (filtradas.length === 0) {
-        Alert.alert('Sin entradas', 'No hay nada que exportar con este filtro.');
+        setAviso({ titulo: 'Sin entradas', mensaje: 'No hay nada que exportar con este filtro.', icono: 'document-outline' });
         return;
       }
 
@@ -137,12 +143,13 @@ export default function ExportarDiarioScreen() {
       await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Exportar mi diario' });
     } catch (e: any) {
       if (e?.message?.includes('Cannot find module')) {
-        Alert.alert(
-          'Paquetes faltantes',
-          'Para exportar PDF ejecuta:\n\nnpx expo install expo-print expo-sharing\n\ny vuelve a compilar la app.',
-        );
+        setAviso({
+          titulo: 'No se pudo exportar',
+          mensaje: 'La exportación a PDF no está disponible en esta versión. Inténtalo más tarde.',
+          icono: 'alert-circle-outline',
+        });
       } else {
-        Alert.alert('Error', e?.message ?? 'No se pudo exportar.');
+        setAviso({ titulo: 'No se pudo exportar', mensaje: e?.message ?? 'Inténtalo de nuevo.', icono: 'alert-circle-outline' });
       }
     } finally {
       setExportando(false);
@@ -242,6 +249,7 @@ export default function ExportarDiarioScreen() {
         </Text>
 
       </ScrollView>
+      <AvisoSenti aviso={aviso} onClose={() => setAviso(null)} />
     </View>
   );
 }

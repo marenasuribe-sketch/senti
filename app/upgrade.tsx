@@ -4,12 +4,13 @@
  * Por ahora muestra los precios y features — sin pago real todavía.
  */
 
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { PRECIOS } from '../lib/premium';
 import { comprar, obtenerPackages, restaurarCompras } from '../lib/revenuecat';
+import AvisoSenti, { AvisoConfig } from '../components/AvisoSenti';
 
 type Feature = {
   icono: keyof typeof Ionicons.glyphMap;
@@ -32,16 +33,17 @@ const FEATURES: Feature[] = [
 export default function UpgradeScreen() {
   const router = useRouter();
   const [comprando, setComprando] = useState(false);
+  const [aviso, setAviso] = useState<AvisoConfig | null>(null);
 
   async function handleComprar(tipo: 'mensual' | 'anual' | 'early') {
     const packages = await obtenerPackages();
     if (!packages) {
       // RevenueCat no está configurado todavía
-      Alert.alert(
-        'Muy pronto',
-        'Los pagos estarán disponibles en el lanzamiento oficial de Senti. ¡Gracias por tu paciencia!',
-        [{ text: 'Entendido', style: 'default' }],
-      );
+      setAviso({
+        titulo: 'Muy pronto',
+        mensaje: 'Los pagos estarán disponibles en el lanzamiento oficial de Senti. ¡Gracias por tu paciencia!',
+        icono: 'time-outline',
+      });
       return;
     }
     setComprando(true);
@@ -54,12 +56,15 @@ export default function UpgradeScreen() {
       const pkg = packages.find(p => p.product.identifier === ids[tipo]) ?? packages[0];
       const ok = await comprar(pkg);
       if (ok) {
-        Alert.alert('¡Bienvenida a Senti+!', 'Tu suscripción está activa.', [
-          { text: 'Continuar', onPress: () => router.back() },
-        ]);
+        setAviso({
+          titulo: '¡Bienvenida a Senti+!',
+          mensaje: 'Tu suscripción está activa.',
+          icono: 'sparkles', iconoBg: '#bfefbd', iconoColor: '#1e4824',
+          botones: [{ texto: 'Continuar', variante: 'primario', onPress: () => router.back() }],
+        });
       }
     } catch (e: any) {
-      Alert.alert('No se pudo completar', e?.message ?? 'Intenta de nuevo.');
+      setAviso({ titulo: 'No se pudo completar', mensaje: e?.message ?? 'Intenta de nuevo.', icono: 'alert-circle-outline' });
     } finally {
       setComprando(false);
     }
@@ -69,8 +74,12 @@ export default function UpgradeScreen() {
     setComprando(true);
     try {
       const ok = await restaurarCompras();
-      Alert.alert(ok ? '¡Restaurado!' : 'Sin compras previas',
-        ok ? 'Tu Senti+ está activo.' : 'No encontramos compras anteriores con esta cuenta.');
+      setAviso({
+        titulo: ok ? '¡Restaurado!' : 'Sin compras previas',
+        mensaje: ok ? 'Tu Senti+ está activo.' : 'No encontramos compras anteriores con esta cuenta.',
+        icono: ok ? 'checkmark-circle-outline' : 'information-circle-outline',
+        iconoBg: ok ? '#bfefbd' : '#f8f0e3', iconoColor: ok ? '#1e4824' : '#8a5010',
+      });
     } finally {
       setComprando(false);
     }
@@ -176,6 +185,7 @@ export default function UpgradeScreen() {
 
       <View style={{ height: 32 }} />
 
+      <AvisoSenti aviso={aviso} onClose={() => setAviso(null)} />
     </ScrollView>
   );
 }
