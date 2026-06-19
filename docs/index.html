@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Senti — Privacidad y Términos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Manrope:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #fbf9f4;
+      --surface: #f5f4ed;
+      --title: #31332c;
+      --body: #5e6058;
+      --muted: #b1b3a9;
+      --accent: #3d6841;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--body);
+      font-family: 'Manrope', sans-serif;
+      line-height: 1.6;
+      padding: 0 24px;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 56px 0 80px; }
+    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .brand-dot { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); }
+    .brand-name { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 20px; color: var(--title); }
+    .updated { font-size: 13px; color: var(--muted); margin-bottom: 40px; }
+    h1 {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-weight: 800; font-size: 30px; color: var(--title);
+      letter-spacing: -0.6px; margin: 40px 0 20px;
+    }
+    h1:first-of-type { margin-top: 0; }
+    .card {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 22px 24px;
+      margin-bottom: 16px;
+    }
+    .card h2 {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-weight: 700; font-size: 16px; color: var(--title);
+      margin-bottom: 8px;
+    }
+    .card p { font-size: 15px; color: var(--body); }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    footer { margin-top: 48px; font-size: 13px; color: var(--muted); text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">
+      <span class="brand-dot" aria-hidden="true"></span>
+      <span class="brand-name">Senti</span>
+    </div>
+    <p class="updated">Última actualización: 10 de junio de 2026</p>
+
+    <h1>Política de Privacidad</h1>
+
+    <div class="card">
+      <h2>Qué datos guardamos</h2>
+      <p>Senti guarda únicamente lo que tú escribes o grabas: entradas de diario, gratitudes, descargas emocionales y cartas a tu yo futuro. También guardamos tu email de Google para identificar tu cuenta.</p>
+    </div>
+
+    <div class="card">
+      <h2>Para qué usamos tus datos</h2>
+      <p>Tus datos se usan exclusivamente para mostrarte tu historial, analizar tus emociones con IA y hacer crecer tu planta. Nunca los usamos para publicidad, ni los vendemos a terceros.</p>
+    </div>
+
+    <div class="card">
+      <h2>Análisis con inteligencia artificial</h2>
+      <p>Cuando usas el Diario, tu texto se envía a la API de Anthropic (Claude) para generar el análisis emocional. Anthropic no almacena tus mensajes por defecto. El análisis se guarda en nuestra base de datos asociado únicamente a tu cuenta.</p>
+    </div>
+
+    <div class="card">
+      <h2>Transcripción de audio</h2>
+      <p>Si usas la función de audio, la grabación se envía a la API de OpenAI (Whisper) para transcribirla. OpenAI no retiene el audio una vez transcrito. Solo guardamos el texto resultante.</p>
+    </div>
+
+    <div class="card">
+      <h2>Dónde se almacenan tus datos</h2>
+      <p>Tu información se almacena en Supabase (base de datos PostgreSQL en la nube). Los servidores están ubicados en la región US East. Tus datos están protegidos con autenticación y Row Level Security: ningún otro usuario puede leer tus entradas.</p>
+    </div>
+
+    <div class="card">
+      <h2>Acceso a tus datos</h2>
+      <p>Solo tú puedes ver tus entradas. El equipo de Senti no accede a tu contenido personal salvo en caso de requerimiento legal o para resolver un problema técnico que tú reportes.</p>
+    </div>
+
+    <div class="card">
+      <h2>Cuánto tiempo guardamos tus datos</h2>
+      <p>Tus datos se conservan mientras tengas una cuenta activa. Si eliminas tu cuenta, todos tus datos son borrados permanentemente dentro de 30 días.</p>
+    </div>
+
+    <div class="card">
+      <h2>Tus derechos</h2>
+      <p>Tienes derecho a acceder, corregir o eliminar tu información en cualquier momento. Para ejercerlos escríbenos a <a href="mailto:privacidad@senti.app">privacidad@senti.app</a>.</p>
+    </div>
+
+    <h1>Términos de Uso</h1>
+
+    <div class="card">
+      <h2>Uso permitido</h2>
+      <p>Senti es una herramienta de bienestar personal. Puedes usarla para tu propio cuidado emocional. No está permitido usar la app para fines ilegales, compartir acceso con terceros ni intentar acceder a datos de otros usuarios.</p>
+    </div>
+
+    <div class="card">
+      <h2>No es atención médica</h2>
+      <p>Senti no es un servicio de salud mental ni reemplaza la atención profesional. Si estás en crisis, comunícate con un profesional de salud mental o una línea de emergencia en tu país.</p>
+    </div>
+
+    <div class="card">
+      <h2>Propiedad intelectual</h2>
+      <p>El contenido de la app (diseño, textos, lógica) pertenece a Senti. Tus entradas personales son tuyas — Senti no reclama propiedad sobre lo que escribes.</p>
+    </div>
+
+    <div class="card">
+      <h2>Cambios en el servicio</h2>
+      <p>Podemos actualizar estas políticas o el servicio con aviso previo por email. El uso continuado de la app después del aviso implica aceptación de los cambios.</p>
+    </div>
+
+    <div class="card">
+      <h2>Contacto</h2>
+      <p>¿Preguntas? Escríbenos a <a href="mailto:hola@senti.app">hola@senti.app</a></p>
+    </div>
+
+    <footer>© 2026 Senti — Diario de bienestar</footer>
+  </div>
+</body>
+</html>
