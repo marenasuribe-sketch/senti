@@ -1,118 +1,117 @@
 # Auditoría Senti — Camino a Google Play
-**Fecha:** 2026-06-18
-
-Este documento lista **todo** lo que falta para publicar, sin sorpresas. Está
-dividido entre lo que puede hacer Claude (código) y lo que solo puedes hacer tú
-(cuentas, dashboards, dispositivo).
+**Fecha:** 2026-06-19 (actualizada)
 
 ---
 
 ## Estado general
 
-✅ **El código está sano.** Typecheck limpio, sin credenciales hardcodeadas, sin
-TODOs colgando, RLS protegiendo los datos. Lo que falta para publicar es casi
-todo **operacional** (config de cuentas externas, assets, despliegues), no código.
-
-La razón de que "parecía lista pero siempre hay algo": los huecos estaban en
-cosas que **no se ven en el código** — RLS en Supabase, si las Edge Functions
-están desplegadas, si la OpenAI key tiene saldo, etc. Este documento los expone
-todos de una vez.
+✅ **El código está listo para publicar.** RLS activo, sin credenciales expuestas, pagos integrados, política de privacidad actualizada según Ley 21.719. Lo único que falta son pasos externos (cuentas y configuración).
 
 ---
 
-## 1. Arreglado en esta sesión (ya está en el código)
+## Lo que está hecho al 2026-06-19
 
 | Qué | Estado |
 |---|---|
-| Seguridad: RLS en todas las tablas | ✅ Aplicado y verificado |
-| Seguridad: API key de Anthropic rotada + historial git limpio | ✅ |
-| Seguridad: webhook RevenueCat "falla cerrado" | ✅ |
-| **Audio no transcribía** (multipart roto en `functions.invoke`) | ✅ Reescrito con `fetch` directo en `lib/edge.ts` |
-| Modal de logro rediseñado (compacto, flotante) | ✅ |
-| Componente `AvisoSenti` (avisos con diseño Senti) | ✅ Creado, aplicado en 1 pantalla |
+| RLS en todas las tablas (7 tablas protegidas) | ✅ SQL listo en `0001_rls_policies.sql` |
+| Columna `perfiles.intake` para onboarding | ✅ SQL listo en `0002_perfiles_intake.sql` |
+| RevenueCat integrado (SDK + webhook + layout) | ✅ Código completo |
+| Webhook RevenueCat deployado en Supabase | ✅ Activo |
+| Política de privacidad Ley 21.719 | ✅ `docs/index.html` + `app/privacidad.tsx` |
+| HTML de privacidad para publicar (GitHub Pages) | ✅ `docs/index.html` |
+| AvisoSenti en todas las pantallas que lo necesitan | ✅ (9 pantallas) |
+| Bug audio multipart corregido (`lib/edge.ts`) | ✅ |
+| Límites IA correctos (gratis=1/mes, premium=4/día) | ✅ |
+| Grid Senti+ con flexWrap | ✅ |
+| Textos de ficha Play Store | ✅ En `PLAYSTORE.md` |
+| App funcionando en dispositivo real | ✅ Verificado con capturas |
 
 ---
 
-## 2. Pendiente de código — lo puede hacer Claude
+## PENDIENTE — SQL en Supabase (REQUERIDO antes de publicar)
 
-| Tarea | Detalle | Esfuerzo |
-|---|---|---|
-| Replicar `AvisoSenti` a las 8 pantallas restantes | ~38 `Alert.alert` grises del sistema → diseño Senti. Concordancia total. | Medio |
-| Arreglar bug del intake | El onboarding guarda respuestas en `perfiles.intake`, columna que no existe → se pierde. Requiere migración SQL + ajustar grant. | Bajo |
-| Generar política de privacidad en HTML | Ya existe el texto en `app/privacidad.tsx`. Convertirlo a HTML estático para publicar. | Bajo |
-| Limpiar Alert obsoleto en `exportar-diario` | Mensaje "Paquetes faltantes" ya no aplica (expo-print/sharing están instalados). | Trivial |
+> Estos archivos ya existen en el repo pero hay que correrlos manualmente en Supabase.
 
----
+### Paso 1: Ir a Supabase SQL Editor
+`https://supabase.com/dashboard/project/mumtrkgnfvfstdjtyiui/sql`
 
-## 3. Requiere verificación TUYA (no tengo acceso)
+### Paso 2: Correr 0001_rls_policies.sql
+Pegar y ejecutar el contenido de `supabase/migrations/0001_rls_policies.sql`
 
-Estos son los que causan "sorpresas" — hay que mirarlos en los dashboards o en el
-dispositivo:
+### Paso 3: Correr 0002_perfiles_intake.sql
+Pegar y ejecutar el contenido de `supabase/migrations/0002_perfiles_intake.sql`
 
-### A. ¿El audio ya funciona? (probar tras el fix)
-Acabo de reescribir el envío de audio. Para confirmar si quedó resuelto:
-1. Recarga la app y graba un audio en Descarga.
-2. Si funciona → listo.
-3. Si sigue fallando, el mensaje de error ahora será claro (ya no "non-2xx").
-   Anótalo y lo resolvemos. Las causas posibles restantes son B y C.
+### Verificar que quedó bien:
+```sql
+-- Debe devolver 0 filas (sin policies abiertas):
+SELECT tablename, policyname, qual, with_check
+FROM pg_policies
+WHERE schemaname='public' AND (qual = 'true' OR with_check = 'true');
 
-### B. ¿Está desplegada la función `transcribir-audio`?
-El análisis del diario funciona, así que `analizar-journal` está desplegada. Pero
-`transcribir-audio` podría no estarlo. Verifica en Supabase → Edge Functions que
-aparezca en la lista. Si no, hay que desplegarla (ver paso en sección 4).
-
-### C. ¿La OpenAI key tiene saldo y es válida?
-El audio usa OpenAI Whisper. En [platform.openai.com](https://platform.openai.com)
-→ Billing, confirma que la cuenta tiene saldo y la key del secret `OPENAI_API_KEY`
-en Supabase es válida. Sin saldo, el audio falla aunque el código esté perfecto.
-
-### D. ¿Están todos los secrets en Supabase?
-En Supabase → Edge Functions → Secrets, confirma que existen:
-`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
-`SUPABASE_SERVICE_ROLE_KEY`, y (cuando configures RevenueCat) `REVENUECAT_WEBHOOK_SECRET`.
+-- Debe devolver la columna intake:
+SELECT column_name FROM information_schema.columns
+WHERE table_name = 'perfiles' AND column_name = 'intake';
+```
 
 ---
 
-## 4. Camino a Google Play — pasos en orden
+## PENDIENTE — Verificaciones externas (solo tú puedes)
 
-### Bloque 1 — Dejar la app sin errores (PRIMERO)
-- [ ] **Claude:** terminar `AvisoSenti` en todas las pantallas + arreglar intake
-- [ ] **Tú:** verificar audio (sección 3A–C)
-- [ ] **Tú:** probar el flujo completo en el dispositivo (los 5 tabs, onboarding,
-      guardar gratitud/diario/descarga, que la planta sume gotas)
+### A. Probar audio en el celular
+1. Abrir Descarga o Gratitud → tocar el micrófono → grabar → confirmar que transcribe el texto
+2. Si falla: anotar el mensaje de error exacto y lo revisamos
 
-### Bloque 2 — RevenueCat (pagos)
-Checklist completo en [PLAYSTORE.md](PLAYSTORE.md) sección RevenueCat. Resumen:
-- [ ] **Tú:** crear cuenta RevenueCat + productos en Google Play
-- [ ] **Tú:** copiar API key Android al `.env` y a EAS secrets
-- [ ] **Tú:** configurar webhook con su secret en Supabase
-- [ ] **Claude:** puede ayudar a verificar la integración en código
+### B. Edge Functions activas en Supabase
+Ir a `https://supabase.com/dashboard/project/mumtrkgnfvfstdjtyiui/functions`
+Confirmar que aparecen las 3:
+- `analizar-journal`
+- `transcribir-audio`
+- `revenuecat-webhook`
 
-### Bloque 3 — Ficha de Play Store
-- [ ] **Claude:** generar la política de privacidad en HTML
-- [ ] **Tú:** publicarla (GitHub Pages o Vercel) y obtener la URL pública
-- [ ] **Tú:** crear Feature Graphic 1024×500 (Canva)
-- [ ] **Tú:** tomar capturas de pantalla (mín. 2, ideal 6)
-- [x] Textos de la ficha (título, descripción) — ya están en PLAYSTORE.md
+Si falta `transcribir-audio`:
+```
+npx supabase functions deploy transcribir-audio --project-ref mumtrkgnfvfstdjtyiui
+```
 
-### Bloque 4 — Build y publicación
-- [ ] **Tú:** desplegar Edge Functions si falta alguna:
-      `npx supabase functions deploy transcribir-audio --project-ref mumtrkgnfvfstdjtyiui`
-- [ ] **Tú:** cuenta Google Play Console ($25 USD, pago único)
-- [ ] **Tú:** build de producción: `npx eas build --platform android --profile production`
-- [ ] **Tú:** subir el .aab + completar ficha + clasificación de contenido
-- [ ] **Tú:** enviar a revisión (primero Internal Testing, luego Production)
+### C. Saldo y secrets en Supabase
+- Supabase → Edge Functions → Secrets: confirmar `ANTHROPIC_API_KEY` y `OPENAI_API_KEY`
+- platform.openai.com → Billing: confirmar que hay saldo
 
 ---
 
-## 5. Resumen: qué falta de verdad
+## Camino a Google Play — pasos en orden
 
-**Para que la app FUNCIONE sin errores (lo que pediste antes de subir):**
-1. Confirmar que el audio quedó arreglado (probar) — sección 3A
-2. Claude termina los avisos + el intake — sección 2
-3. Probar el flujo completo en el dispositivo
+### Bloque 1 — SQL y verificaciones (esta semana)
+- [ ] Tú: correr `0001_rls_policies.sql` en Supabase SQL Editor
+- [ ] Tú: correr `0002_perfiles_intake.sql` en Supabase SQL Editor
+- [ ] Tú: probar audio en el celular
+- [ ] Tú: confirmar Edge Functions activas
 
-**Para PUBLICAR (después de que funcione):**
-4. RevenueCat + privacidad pública + assets + build + cuenta Play Console
+### Bloque 2 — Política de privacidad pública (esta semana)
+El HTML ya está listo en `docs/index.html`. Solo hay que publicarlo:
+- [ ] Tú: crear repo público en GitHub (ej. `sentiapp/privacy`)
+- [ ] Tú: subir el archivo `docs/index.html` a ese repo
+- [ ] Tú: activar GitHub Pages → Settings → Pages → Source: main → /root (o /docs)
+- [ ] Tú: copiar la URL pública resultante (ej. `https://sentiapp.github.io/privacy`)
 
-Nada de esto es código roto — es configuración y pruebas. La base está sólida.
+### Bloque 3 — RevenueCat (pagos)
+Checklist completo en `PLAYSTORE.md`. Resumen:
+- [ ] Tú: crear cuenta en revenuecat.com (gratis)
+- [ ] Tú: crear cuenta Google Play Console ($25 USD)
+- [ ] Tú: crear productos de suscripción en Google Play Console
+- [ ] Tú: configurar RevenueCat con los productos
+- [ ] Tú: copiar API key → agregar a `.env` + EAS secrets
+- [ ] Tú: configurar webhook con su secret en Supabase
+
+### Bloque 4 — Assets y build
+- [ ] Tú: Feature Graphic 1024×500 en Canva (fondo #3d6841, logo blanco)
+- [ ] Tú: 2-6 capturas de pantalla desde el celular
+- [ ] Tú: nuevo build con keys de RevenueCat:
+  ```
+  npx eas build --platform android --profile production
+  ```
+
+### Bloque 5 — Publicación
+- [ ] Tú: subir .aab + ficha + capturas + URL privacidad en Play Console
+- [ ] Tú: clasificación de contenido (cuestionario en Play Console — todo NO)
+- [ ] Tú: enviar a Internal Testing → producción

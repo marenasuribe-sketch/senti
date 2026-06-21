@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  StyleSheet, ActivityIndicator,
+  StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -69,6 +69,11 @@ export default function CapsulaNewScreen() {
   }
 
   return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
+    >
     <ScrollView style={S.container} contentContainerStyle={S.content} keyboardShouldPersistTaps="handled">
 
       {/* Header */}
@@ -148,6 +153,7 @@ export default function CapsulaNewScreen() {
       <AvisoSenti aviso={aviso} onClose={() => setAviso(null)} />
 
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

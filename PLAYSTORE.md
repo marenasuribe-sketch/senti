@@ -70,7 +70,7 @@ Sin contenido violento, sin compras agresivas, sin datos de menores.
 2. Pegar el contenido de la pantalla privacidad como HTML
 3. Publicar en vercel.app
 
-**URL a colocar en Play Console:** _(rellenar cuando esté publicada)_
+**URL a colocar en Play Console:** https://marenasuribe-sketch.github.io/Senti-privacy/
 
 ---
 

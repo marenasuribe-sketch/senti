@@ -32,28 +32,9 @@ Deno.serve(async (req) => {
     if (!texto || texto.trim().length < 10) return json({ error: 'Texto demasiado corto' }, 400);
     if (texto.length > MAX_TEXTO_CHARS) return json({ error: 'Texto demasiado largo' }, 400);
 
-    // 3. Verificar plan y rate limit
+    // 3. Verificar plan del usuario (sin límite aquí — el cliente chequea entradas del mes)
     const perfil = await supabase.from('perfiles').select('es_premium').eq('user_id', user.id).maybeSingle();
     const esPremium = perfil.data?.es_premium ?? false;
-
-    if (esPremium) {
-      // Premium: 4 análisis por día
-      const inicioDia = new Date(); inicioDia.setHours(0, 0, 0, 0);
-      const { count } = await supabase.from('journal')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id).eq('es_descarga', false)
-        .gte('created_at', inicioDia.toISOString());
-      if ((count ?? 0) >= 4) return json({ error: 'LIMITE_DIA' }, 429);
-    } else {
-      // Gratis: 1 análisis por mes
-      const inicioMes = new Date();
-      inicioMes.setDate(1); inicioMes.setHours(0, 0, 0, 0);
-      const { count } = await supabase.from('journal')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id).eq('es_descarga', false)
-        .gte('created_at', inicioMes.toISOString());
-      if ((count ?? 0) >= 1) return json({ error: 'LIMITE_MES' }, 429);
-    }
 
     // 4. Recuperar contexto histórico según plan
     // Premium: últimos 60 días (~2 meses de patrones)

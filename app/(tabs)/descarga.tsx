@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  ActivityIndicator, StyleSheet, KeyboardAvoidingView, Platform,
+  ActivityIndicator, StyleSheet, KeyboardAvoidingView, Platform, Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAudioRecorder, AudioModule, RecordingPresets } from 'expo-audio';
@@ -10,6 +10,8 @@ import { supabase } from '../../lib/supabase';
 import { transcribirAudio } from '../../lib/edge';
 import { sumarGotas } from '../../lib/planta';
 import { LIMITES_TEXTO, superaLimite } from '../../lib/validation';
+import { contarEntradasMes, LIMITES } from '../../lib/premium';
+import { usePremium } from '../../hooks/usePremium';
 import AvisoSenti, { AvisoConfig } from '../../components/AvisoSenti';
 import { verificarLogros, type Logro } from '../../lib/logros';
 import CelebracionEtapa from '../../components/CelebracionEtapa';
@@ -18,16 +20,20 @@ import SentiLogo from '../../components/SentiLogo';
 
 const TAGS: Array<{ id: string; label: string }> = [
   { id: 'enojo',     label: 'Enojo' },
+  { id: 'tristeza',  label: 'Tristeza' },
+  { id: 'miedo',     label: 'Miedo' },
+  { id: 'alegria',   label: 'Alegría' },
   { id: 'rumiacion', label: 'Rumiación' },
   { id: 'verguenza', label: 'Vergüenza' },
-  { id: 'miedo',     label: 'Miedo' },
-  { id: 'tristeza',  label: 'Tristeza' },
+  { id: 'ternura',   label: 'Ternura' },
+  { id: 'asombro',   label: 'Asombro' },
   { id: 'tarea',     label: 'Tarea pendiente' },
   { id: 'otro',      label: 'Otro' },
 ];
 
 export default function DescargaScreen() {
   const router = useRouter();
+  const { esPremium, cargando: premiumCargando } = usePremium();
   const [texto, setTexto]             = useState('');
   const [tagsSel, setTagsSel]         = useState<string[]>([]);
   const [guardando, setGuardando]     = useState(false);
@@ -40,6 +46,7 @@ export default function DescargaScreen() {
   const [usedAudio, setUsedAudio]       = useState(false);
   const [celebracion, setCelebracion]   = useState<{ etapa: number; plantaId: string | null } | null>(null);
   const [logros, setLogros]             = useState<Logro[]>([]);
+  const scrollRef = useRef<ScrollView>(null);
   const [logroIdx, setLogroIdx]         = useState(0);
 
   function toggleTag(id: string) {
@@ -47,6 +54,19 @@ export default function DescargaScreen() {
   }
 
   async function startRecording() {
+    if (premiumCargando) return;
+    if (!esPremium) {
+      setAviso({
+        titulo: 'Audio en Descarga',
+        mensaje: 'Con Senti+ puedes hablar y soltar lo que traes sin escribir nada.',
+        icono: 'lock-closed', iconoBg: '#eee1cc', iconoColor: '#595141',
+        botones: [
+          { texto: 'Ver Senti+', variante: 'primario', onPress: () => router.push('/upgrade') },
+          { texto: 'Ahora no', variante: 'secundario' },
+        ],
+      });
+      return;
+    }
     try {
       const { granted } = await AudioModule.requestRecordingPermissionsAsync();
       if (!granted) { setAviso({ titulo: 'Permiso denegado', mensaje: 'Senti necesita acceso al micrófono para grabar tu voz.', icono: 'mic-off-outline' }); return; }
@@ -71,35 +91,42 @@ export default function DescargaScreen() {
       setUsedAudio(true);
     } catch (e: any) {
       const msg = e?.message ?? String(e);
-      if (msg === 'LIMITE_AUDIO_GRATIS') {
-        setAviso({
-          titulo: 'Ya usaste tu audio de hoy',
-          mensaje: 'En el plan gratuito tienes 1 audio al día. Vuelve mañana o escribe directamente.',
-          icono: 'lock-closed', iconoBg: '#eee1cc', iconoColor: '#595141',
-          botones: [
-            { texto: 'Conocer Senti+', variante: 'primario', onPress: () => router.push('/upgrade') },
-            { texto: 'Ahora no', variante: 'secundario' },
-          ],
-        });
-      } else if (msg === 'LIMITE_AUDIO_PREMIUM') {
-        setAviso({ titulo: 'Límite del día', mensaje: 'Ya usaste tus 10 audios de hoy. Vuelven mañana.', icono: 'time-outline' });
-      } else {
-        setAviso({ titulo: 'No se pudo transcribir', mensaje: msg, icono: 'alert-circle-outline' });
-      }
+      setAviso({ titulo: 'No se pudo transcribir', mensaje: msg, icono: 'alert-circle-outline' });
     }
     finally { setTranscribing(false); }
   }
 
   async function soltar() {
+    Keyboard.dismiss();
     if (!texto.trim()) return;
     if (superaLimite(texto, 'descarga')) {
       setAviso({ titulo: 'Texto demasiado largo', mensaje: `Máximo ${LIMITES_TEXTO.descarga} caracteres.`, icono: 'create-outline' });
       return;
     }
     setGuardando(true);
+    try {
     const { data: { session } } = await supabase.auth.getSession();
     const userId = session?.user?.id;
     if (!userId) { setAviso({ titulo: 'No hay sesión activa', mensaje: 'Vuelve a iniciar sesión para guardar.', icono: 'alert-circle-outline' }); setGuardando(false); return; }
+
+    const entradasMes = await contarEntradasMes(supabase, userId);
+    const limite = esPremium ? LIMITES.premium.entradas_porMes : LIMITES.gratis.entradas_porMes;
+    if (entradasMes >= limite) {
+      if (esPremium) {
+        setAviso({ titulo: 'Límite del mes alcanzado', mensaje: 'Llegaste a 30 entradas este mes. Se renueva el 1 del mes que viene.', icono: 'calendar-outline' });
+      } else {
+        setAviso({
+          titulo: 'Usaste tus 5 entradas del mes',
+          mensaje: 'El plan gratuito incluye 5 entradas al mes entre el diario, gratitud y descarga. Con Senti+ tienes 30 al mes + audio.',
+          icono: 'lock-closed', iconoBg: '#eee1cc', iconoColor: '#595141',
+          botones: [
+            { texto: 'Ver Senti+', variante: 'primario', onPress: () => router.push('/upgrade') },
+            { texto: 'Ahora no', variante: 'secundario' },
+          ],
+        });
+      }
+      setGuardando(false); return;
+    }
 
     const tagsLine = tagsSel.length ? `[${tagsSel.join(', ')}]\n\n` : '';
     const textoGuardar = tagsLine + texto.trim();
@@ -131,16 +158,25 @@ export default function DescargaScreen() {
 
     setGuardado(true);
     setGuardando(false);
+    } catch (e: any) {
+      setAviso({ titulo: 'Algo salió mal', mensaje: e?.message ?? 'Intenta de nuevo.', icono: 'alert-circle-outline' });
+      setGuardando(false);
+    }
   }
 
   function nuevaDescarga() {
-    setTexto('');
-    setTagsSel([]);
-    setGuardado(false);
-    setUsedAudio(false);
-    setCelebracion(null);
+    // Cierra modales primero para que animen antes de desmontar el branch
     setLogros([]);
     setLogroIdx(0);
+    setCelebracion(null);
+    setAviso(null);
+    setTimeout(() => {
+      setTexto('');
+      setTagsSel([]);
+      setUsedAudio(false);
+      setGuardado(false);
+      setTimeout(() => scrollRef.current?.scrollTo({ x: 0, y: 0, animated: false }), 50);
+    }, 320);
   }
 
   function cerrarLogro() {
@@ -152,10 +188,14 @@ export default function DescargaScreen() {
     }
   }
 
-  // ── Pantalla de confirmación tras guardar ──
-  if (guardado) {
-    return (
-      <View style={S.container}>
+  // ── Render ──
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+    {guardado ? (
+      <View style={[S.container, { flex: 1 }]}>
         <View style={S.topBar}>
           <View style={S.logoRow}>
             <SentiLogo size={22} />
@@ -171,10 +211,12 @@ export default function DescargaScreen() {
           <Text style={S.confirmSub}>
             Lo que escribiste se queda aquí, en tu santuario. Nadie más lo verá. Tu planta lo recibió como un riego silencioso.
           </Text>
-
           <TouchableOpacity style={S.btnNueva} onPress={nuevaDescarga} activeOpacity={0.85}>
             <Ionicons name="add" size={18} color="#e4ffe0" />
             <Text style={S.btnNuevaText}>Soltar otra cosa</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={S.btnVolver} onPress={() => router.push('/')} activeOpacity={0.7}>
+            <Text style={S.btnVolverText}>Ir a mi planta</Text>
           </TouchableOpacity>
         </View>
 
@@ -187,125 +229,99 @@ export default function DescargaScreen() {
           />
         )}
         <LogroModal logro={logros[logroIdx] ?? null} onClose={cerrarLogro} />
+        <AvisoSenti aviso={aviso} onClose={() => setAviso(null)} />
       </View>
-    );
-  }
-
-  // ── Pantalla principal ──
-  const scrollRef = useRef<ScrollView>(null);
-
-  return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
-    >
-    <ScrollView
-      ref={scrollRef}
-      style={S.container}
-      contentContainerStyle={S.content}
-      keyboardShouldPersistTaps="handled"
-    >
-
-      {/* TopBar */}
-      <View style={S.topBar}>
-        <View style={S.logoRow}>
-          <SentiLogo size={22} />
-          <Text style={S.logoText}>Senti</Text>
-        </View>
-      </View>
-
-      <View style={S.section}>
-
-        {/* Hero editorial */}
-        <Text style={S.heroTitle}>Suelta lo que pesa.</Text>
-        <Text style={S.heroSub}>
-          Lo que sea. Un enojo, un pensamiento que da vueltas, algo que no le puedes decir a nadie. Aquí no hay juicios.
-        </Text>
-
-        {/* Card de input grande */}
-        <View style={S.inputCard}>
-          <TextInput
-            style={S.inputBig}
-            value={texto}
-            onChangeText={setTexto}
-            placeholder="Escribe lo que tienes adentro. Todo lo que digas se queda aquí, en tu santuario."
-            placeholderTextColor="#b1b3a9"
-            multiline
-            textAlignVertical="top"
-            maxLength={LIMITES_TEXTO.descarga}
-            editable={!guardando && !transcribing}
-            scrollEnabled
-            onContentSizeChange={() =>
-              scrollRef.current?.scrollToEnd({ animated: true })
-            }
-          />
-          <View style={S.inputFooter}>
-            <Text style={S.autoSave}>SOLO TÚ LO LEES</Text>
-            <TouchableOpacity
-              style={[S.micBtn, isRecording && S.micBtnActive]}
-              onPress={isRecording ? stopRecording : startRecording}
-              disabled={guardando || transcribing}
-              activeOpacity={0.8}
-            >
-              {transcribing
-                ? <ActivityIndicator size="small" color="#3d6841" />
-                : <Ionicons name={isRecording ? 'stop' : 'mic'} size={18} color={isRecording ? '#9e422c' : '#3d6841'} />
-              }
-            </TouchableOpacity>
+    ) : (
+      <ScrollView
+        ref={scrollRef}
+        style={S.container}
+        contentContainerStyle={S.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={S.topBar}>
+          <View style={S.logoRow}>
+            <SentiLogo size={22} />
+            <Text style={S.logoText}>Senti</Text>
           </View>
         </View>
 
-        {/* Tags opcionales */}
-        <View style={S.tagsBlock}>
-          <Text style={S.tagsLabel}>¿QUIERES NOMBRARLO? <Text style={S.tagsLabelOpt}>(opcional)</Text></Text>
-          <View style={S.tagsRow}>
-            {TAGS.map(t => {
-              const sel = tagsSel.includes(t.id);
-              return (
-                <TouchableOpacity
-                  key={t.id}
-                  style={[S.tagChip, sel && S.tagChipSel]}
-                  onPress={() => toggleTag(t.id)}
-                  activeOpacity={0.75}
-                >
-                  <Text style={[S.tagChipText, sel && S.tagChipTextSel]}>{t.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Botón soltar */}
-        <TouchableOpacity
-          style={[S.btnSoltar, (guardando || isRecording || transcribing || !texto.trim()) && S.btnDisabled]}
-          onPress={soltar}
-          disabled={guardando || isRecording || transcribing || !texto.trim()}
-          activeOpacity={0.85}
-        >
-          {guardando
-            ? <ActivityIndicator color="#e4ffe0" />
-            : (
-              <>
-                <Ionicons name="leaf" size={18} color="#e4ffe0" />
-                <Text style={S.btnSoltarText}>Soltar</Text>
-              </>
-            )
-          }
-        </TouchableOpacity>
-
-        {/* Card editorial — sabiduría */}
-        <View style={S.editorialCard}>
-          <Text style={S.editorialLabel}>POR QUÉ AYUDA</Text>
-          <Text style={S.editorialTitle}>Poner palabras a lo que sientes.</Text>
-          <Text style={S.editorialBody}>
-            Las investigaciones muestran que nombrar una emoción reduce su intensidad. No tienes que entenderla — basta con sacarla.
+        <View style={S.section}>
+          <Text style={S.heroTitle}>Suelta lo que traes.</Text>
+          <Text style={S.heroSub}>
+            Lo que sea. Un enojo, una alegría enorme, algo que no le puedes decir a nadie. Aquí no hay juicios — solo tú.
           </Text>
+
+          <View style={S.inputCard}>
+            <TextInput
+              style={S.inputBig}
+              value={texto}
+              onChangeText={setTexto}
+              placeholder="Escribe lo que tienes adentro. Todo lo que digas se queda aquí, en tu santuario."
+              placeholderTextColor="#b1b3a9"
+              multiline
+              textAlignVertical="top"
+              maxLength={LIMITES_TEXTO.descarga}
+              editable={!guardando && !transcribing}
+            />
+            <View style={S.inputFooter}>
+              <Text style={S.autoSave}>SOLO TÚ LO LEES</Text>
+              <TouchableOpacity
+                style={[S.micBtn, isRecording && S.micBtnActive]}
+                onPress={isRecording ? stopRecording : startRecording}
+                disabled={guardando || transcribing}
+                activeOpacity={0.8}
+              >
+                {transcribing
+                  ? <ActivityIndicator size="small" color="#3d6841" />
+                  : <Ionicons name={isRecording ? 'stop' : 'mic'} size={18} color={isRecording ? '#9e422c' : '#3d6841'} />
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={S.tagsBlock}>
+            <Text style={S.tagsLabel}>¿QUIERES NOMBRARLO? <Text style={S.tagsLabelOpt}>(opcional)</Text></Text>
+            <View style={S.tagsRow}>
+              {TAGS.map(t => {
+                const sel = tagsSel.includes(t.id);
+                return (
+                  <TouchableOpacity
+                    key={t.id}
+                    style={[S.tagChip, sel && S.tagChipSel]}
+                    onPress={() => toggleTag(t.id)}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[S.tagChipText, sel && S.tagChipTextSel]}>{t.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[S.btnSoltar, (guardando || isRecording || transcribing || !texto.trim()) && S.btnDisabled]}
+            onPress={soltar}
+            disabled={guardando || isRecording || transcribing || !texto.trim()}
+            activeOpacity={0.85}
+          >
+            {guardando
+              ? <ActivityIndicator color="#e4ffe0" />
+              : <><Ionicons name="leaf" size={18} color="#e4ffe0" /><Text style={S.btnSoltarText}>Soltar</Text></>
+            }
+          </TouchableOpacity>
+
+          <View style={S.editorialCard}>
+            <Text style={S.editorialLabel}>POR QUÉ AYUDA</Text>
+            <Text style={S.editorialTitle}>Poner palabras a lo que sientes.</Text>
+            <Text style={S.editorialBody}>
+              Las investigaciones muestran que nombrar una emoción reduce su intensidad. No tienes que entenderla — basta con sacarla.
+            </Text>
+          </View>
         </View>
 
-      </View>
-      <AvisoSenti aviso={aviso} onClose={() => setAviso(null)} />
-    </ScrollView>
+        <AvisoSenti aviso={aviso} onClose={() => setAviso(null)} />
+      </ScrollView>
+    )}
     </KeyboardAvoidingView>
   );
 }
@@ -359,4 +375,6 @@ const S = StyleSheet.create({
 
   btnNueva:     { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#3d6841', borderRadius: 9999, paddingVertical: 16, paddingHorizontal: 32, marginTop: 40 },
   btnNuevaText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 15, color: '#e4ffe0', letterSpacing: 0.3 },
+  btnVolver:    { marginTop: 16, paddingVertical: 12, paddingHorizontal: 24 },
+  btnVolverText:{ fontFamily: 'Manrope_500Medium', fontSize: 14, color: '#797c73' },
 });

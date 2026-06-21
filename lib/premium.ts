@@ -10,6 +10,47 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+/** Inicio del mes actual en UTC */
+function inicioMesActual(): string {
+  const d = new Date();
+  d.setDate(1);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+
+/**
+ * Cuenta el total de entradas del mes actual en todas las pantallas
+ * (journal + diario + descargas se guardan en 'journal'; gratitudes en 'gratitudes').
+ */
+export async function contarEntradasMes(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<number> {
+  const desde = inicioMesActual();
+  const [{ count: j }, { count: g }] = await Promise.all([
+    supabase.from('journal').select('*', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', desde),
+    supabase.from('gratitudes').select('*', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', desde),
+  ]);
+  return (j ?? 0) + (g ?? 0);
+}
+
+/**
+ * Cuenta transcripciones de audio del mes (para límite premium de ~40 min).
+ * Asume ~2 min por audio → 20 transcripciones ≈ 40 min.
+ */
+export async function contarAudiosMes(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<number> {
+  const { count } = await supabase
+    .from('journal')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('via_audio', true)
+    .gte('created_at', inicioMesActual());
+  return count ?? 0;
+}
+
 export type Perfil = {
   es_premium: boolean;
   premium_desde: string | null;
@@ -60,17 +101,17 @@ export async function esPremium(
 
 export const LIMITES = {
   gratis: {
-    analisisIA_porMes: 1,
-    audios_porDia: 1,
-    capsulas: 1,           // máximo 1 cápsula activa total
-    plantas: 1,            // solo 1 planta simultánea
+    entradas_porMes: 5,    // total: journal + gratitud + descarga combinados
+    audios_porMes: 0,      // sin audio
+    capsulas: 1,
+    plantas: 1,
     modeloIA: 'claude-haiku-4-5-20251001' as const,
   },
   premium: {
-    analisisIA_porDia: 4,
-    audios_porDia: 10,
-    capsulas: 6,           // hasta 6 cápsulas activas
-    plantas: 3,            // hasta 3 plantas simultáneas
+    entradas_porMes: 30,   // total combinado (~1 por día)
+    audios_porMes: 20,     // ~40 min si cada audio dura ~2 min
+    capsulas: 6,
+    plantas: 3,
     modeloIA: 'claude-sonnet-4-6' as const,
   },
 } as const;
@@ -78,8 +119,6 @@ export const LIMITES = {
 // ─── Precios para mostrar en pantalla ─────────────────────────────────────────
 
 export const PRECIOS = {
-  mensual_usd: 4.99,
-  anual_usd: 39.99,
-  earlyAdopter_clp: 25000,   // precio bloqueado de por vida — primeras 500 personas
-  earlyAdopter_cupos: 500,
+  mensual_usd: 2.95,
+  anual_usd: 15.95,
 } as const;

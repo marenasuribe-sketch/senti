@@ -23,7 +23,7 @@ const MENSAJES_PERSONALIDAD: Record<string, { personalidad: string; mensaje: str
   bambu:   { personalidad: 'Resiliente',     mensaje: 'Como el bambú, te doblas sin romperte. Esa flexibilidad no es debilidad — es tu mayor fortaleza. Tu constancia es lo que te hace crecer.' },
   girasol: { personalidad: 'Optimista',      mensaje: 'Tu naturaleza optimista ilumina todo lo que tocas. Aunque el día esté nublado, tú siempre buscas la luz — y la encuentras.' },
   lavanda: { personalidad: 'Introspectiva',  mensaje: 'Tu mundo interior es rico y profundo. Tienes el don de calmar lo que a otros agita — incluso a ti misma.' },
-  cactus:  { personalidad: 'Independiente',  mensaje: 'No necesitas de todo para florecer. Tu independencia es tu escudo y tu libertad. Floreces cuando nadie lo espera.' },
+  cactus:  { personalidad: 'Independiente',  mensaje: 'Como el cactus, guardas tu energía para cuando más importa. No necesitas aprobación para avanzar — floreces en tus propios términos.' },
   helecho: { personalidad: 'Empático',       mensaje: 'Creces desde lugares difíciles con una gracia silenciosa. Tu empatía te permite ver a los demás de verdad.' },
 };
 

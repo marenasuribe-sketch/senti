@@ -10,6 +10,7 @@ import { supabase } from '../../lib/supabase';
 import { transcribirAudio } from '../../lib/edge';
 import { sumarGotas } from '../../lib/planta';
 import { LIMITES_TEXTO } from '../../lib/validation';
+import { contarEntradasMes, LIMITES } from '../../lib/premium';
 import { verificarLogros, type Logro } from '../../lib/logros';
 import { usePremium } from '../../hooks/usePremium';
 import CelebracionEtapa from '../../components/CelebracionEtapa';
@@ -95,9 +96,7 @@ export default function JournalScreen() {
         setText(prev => prev.trim() ? `${prev.trim()}\n${t}` : t);
       } catch (e: any) {
         const msg = e?.message ?? String(e);
-        if (msg === 'LIMITE_AUDIO_GRATIS') setAviso({ titulo: 'Límite de audio', mensaje: 'Ya usaste tu audio de hoy.', icono: 'time-outline' });
-        else if (msg === 'LIMITE_AUDIO_PREMIUM') setAviso({ titulo: 'Límite de audio', mensaje: 'Ya usaste tus 10 audios de hoy.', icono: 'time-outline' });
-        else setAviso({ titulo: 'No se pudo transcribir', mensaje: msg, icono: 'alert-circle-outline' });
+        setAviso({ titulo: 'No se pudo transcribir', mensaje: msg, icono: 'alert-circle-outline' });
       } finally { setTranscribing(false); }
     } else {
       // Iniciar grabación
@@ -143,6 +142,26 @@ export default function JournalScreen() {
       const userId = session?.user?.id;
       if (!userId || !session) { setAviso({ titulo: 'No hay sesión activa', mensaje: 'Vuelve a iniciar sesión para analizar tu diario.', icono: 'alert-circle-outline' }); setLoading(false); return; }
 
+      // Chequear límite de entradas del mes
+      const entradasMes = await contarEntradasMes(supabase, userId);
+      const limite = esPremium ? LIMITES.premium.entradas_porMes : LIMITES.gratis.entradas_porMes;
+      if (entradasMes >= limite) {
+        if (esPremium) {
+          setAviso({ titulo: 'Límite del mes alcanzado', mensaje: 'Llegaste a 30 entradas este mes. Se renueva el 1 del mes que viene.', icono: 'calendar-outline' });
+        } else {
+          setAviso({
+            titulo: 'Usaste tus 5 entradas del mes',
+            mensaje: 'El plan gratuito incluye 5 entradas al mes entre el diario, gratitud y descarga. Con Senti+ tienes 30 al mes + audio.',
+            icono: 'lock-closed', iconoBg: '#eee1cc', iconoColor: '#595141',
+            botones: [
+              { texto: 'Ver Senti+', variante: 'primario', onPress: () => router.push('/upgrade') },
+              { texto: 'Ahora no', variante: 'secundario' },
+            ],
+          });
+        }
+        setLoading(false); return;
+      }
+
       const analysis = await analyzeWithClaude(text, session);
 
       const stress  = analysis.emociones.find(e => e.label === 'Estrés')?.valor  ?? 0;
@@ -172,21 +191,7 @@ export default function JournalScreen() {
       setResult(analysis);
     } catch (e: any) {
       const msg = e?.message ?? String(e);
-      if (msg === 'LIMITE_DIA') {
-        setAviso({
-          titulo: 'Ya reflexionaste hoy',
-          mensaje: 'El plan gratuito incluye 1 análisis al día. Vuelve mañana, o pasa a Senti+ para 4 al mes.',
-          icono: 'lock-closed', iconoBg: '#eee1cc', iconoColor: '#595141',
-          botones: [
-            { texto: 'Conocer Senti+', variante: 'primario', onPress: () => router.push('/upgrade') },
-            { texto: 'Ahora no', variante: 'secundario' },
-          ],
-        });
-      } else if (msg === 'LIMITE_MES') {
-        setAviso({ titulo: 'Límite mensual alcanzado', mensaje: 'Usaste tus 4 análisis de Senti+ este mes. Se renuevan el próximo mes.', icono: 'time-outline' });
-      } else {
-        setAviso({ titulo: 'Algo salió mal', mensaje: msg, icono: 'alert-circle-outline' });
-      }
+      setAviso({ titulo: 'Algo salió mal', mensaje: msg, icono: 'alert-circle-outline' });
     }
     finally { setLoading(false); }
   }
@@ -353,18 +358,22 @@ export default function JournalScreen() {
 
             <TouchableOpacity
               style={[S.btnGuardarConsejo, consejoGuardado && S.btnGuardarConsejoGuardado]}
-              onPress={handleGuardarConsejo}
+              onPress={consejoGuardado ? () => router.push('/mis-consejos' as any) : handleGuardarConsejo}
               activeOpacity={0.75}
-              disabled={consejoGuardado}
             >
               <Ionicons
-                name={consejoGuardado ? 'checkmark-circle' : (esPremium ? 'bookmark-outline' : 'lock-closed-outline')}
+                name={consejoGuardado ? 'bookmark' : (esPremium ? 'bookmark-outline' : 'lock-closed-outline')}
                 size={16}
                 color={consejoGuardado ? '#3d6841' : '#675e4d'}
               />
               <Text style={[S.btnGuardarConsejoText, consejoGuardado && { color: '#3d6841' }]}>
-                {consejoGuardado ? 'Consejo guardado' : 'Guardar este consejo'}
+                {consejoGuardado ? 'Ver mis consejos →' : 'Guardar este consejo'}
               </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={S.btnNuevaEntrada} onPress={handleNuevaEntrada} activeOpacity={0.85}>
+              <Ionicons name="add-circle-outline" size={18} color="#5e6058" />
+              <Text style={S.btnNuevaEntradaText}>Escribir nueva entrada</Text>
             </TouchableOpacity>
           </>
         )}
@@ -413,6 +422,9 @@ const S = StyleSheet.create({
   btnGuardarConsejo:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#eee1cc', borderRadius: 9999, paddingVertical: 12, paddingHorizontal: 20 },
   btnGuardarConsejoGuardado:{ backgroundColor: '#bfefbd' },
   btnGuardarConsejoText:    { fontFamily: 'Manrope_600SemiBold', fontSize: 13, color: '#675e4d' },
+
+  btnNuevaEntrada:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#f5f4ed', borderRadius: 9999, paddingVertical: 14, marginTop: 8 },
+  btnNuevaEntradaText: { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 14, color: '#5e6058' },
 
   btnPill:      { backgroundColor: '#3d6841', borderRadius: 9999, paddingVertical: 12, paddingHorizontal: 28, alignItems: 'center', justifyContent: 'center', minWidth: 110 },
   btnPillText:  { fontFamily: 'PlusJakartaSans_700Bold', fontSize: 14, color: '#e4ffe0' },

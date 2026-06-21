@@ -35,7 +35,7 @@ const PLANTAS = [
     id: 'cactus',   nombre: 'Cactus',   emoji: '🌵', personalidad: 'Independiente',
     descripcion: 'Fuerte en terreno difícil.',
     glow: '#e8f4ec', accent: '#3d6841',
-    mensaje: 'No necesitas de todo para florecer. Tu independencia es tu escudo y tu libertad.',
+    mensaje: 'Como el cactus, guardas tu energía para cuando más importa. Floreces en tus propios términos.',
   },
   {
     id: 'helecho',  nombre: 'Helecho',  emoji: '🌿', personalidad: 'Empático',

@@ -38,13 +38,6 @@
       "expo-router",
       "expo-web-browser",
       "expo-font",
-      "react-native-purchases",
-      [
-        "expo-av",
-        {
-          "microphonePermission": "Senti necesita el micrófono para grabar notas de voz."
-        }
-      ],
       "expo-audio"
     ],
     "experiments": {

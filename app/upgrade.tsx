@@ -4,7 +4,7 @@
  * Por ahora muestra los precios y features — sin pago real todavía.
  */
 
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -20,14 +20,14 @@ type Feature = {
 };
 
 const FEATURES: Feature[] = [
-  { icono: 'sparkles-outline',   titulo: 'Análisis con IA',       gratis: '1 al mes con Haiku',       premium: '4 al día con Sonnet' },
-  { icono: 'mic-outline',        titulo: 'Audios con voz',        gratis: '1 al día',                  premium: '10 al día' },
+  { icono: 'create-outline',     titulo: 'Entradas al mes',       gratis: '5 en total',                premium: '30 al mes' },
+  { icono: 'sparkles-outline',   titulo: 'Análisis con IA',       gratis: 'En tus 5 entradas',         premium: 'En todas tus entradas' },
+  { icono: 'mic-outline',        titulo: 'Audio y voz',           gratis: 'No disponible',             premium: '40 min al mes' },
   { icono: 'leaf-outline',       titulo: 'Plantas simultáneas',   gratis: '1 planta',                  premium: '3 plantas' },
   { icono: 'flower-outline',     titulo: 'Especies de planta',    gratis: '5 especies',                premium: '13+ especies' },
   { icono: 'mail-outline',       titulo: 'Cápsulas del tiempo',   gratis: '1 total',                   premium: 'Hasta 6 activas' },
-  { icono: 'analytics-outline',  titulo: 'Memoria de la IA',      gratis: 'Últimos 7 días',             premium: 'Patrones de meses' },
+  { icono: 'analytics-outline',  titulo: 'Memoria de la IA',      gratis: 'Últimos 7 días',            premium: 'Patrones de meses' },
   { icono: 'document-outline',   titulo: 'Exportar diario',       gratis: 'No disponible',             premium: 'PDF descargable' },
-  { icono: 'gift-outline',       titulo: 'Donación árbol real',   gratis: 'No disponible',             premium: 'Al cumplir 1 año' },
 ];
 
 export default function UpgradeScreen() {
@@ -35,10 +35,9 @@ export default function UpgradeScreen() {
   const [comprando, setComprando] = useState(false);
   const [aviso, setAviso] = useState<AvisoConfig | null>(null);
 
-  async function handleComprar(tipo: 'mensual' | 'anual' | 'early') {
+  async function handleComprar(tipo: 'mensual' | 'anual') {
     const packages = await obtenerPackages();
     if (!packages) {
-      // RevenueCat no está configurado todavía
       setAviso({
         titulo: 'Muy pronto',
         mensaje: 'Los pagos estarán disponibles en el lanzamiento oficial de Senti. ¡Gracias por tu paciencia!',
@@ -51,7 +50,6 @@ export default function UpgradeScreen() {
       const ids: Record<typeof tipo, string> = {
         mensual: 'com.sentiapp.plus.monthly',
         anual:   'com.sentiapp.plus.annual',
-        early:   'com.sentiapp.plus.early',
       };
       const pkg = packages.find(p => p.product.identifier === ids[tipo]) ?? packages[0];
       const ok = await comprar(pkg);
@@ -102,30 +100,7 @@ export default function UpgradeScreen() {
         </Text>
       </View>
 
-      {/* Early adopter card */}
-      <View style={S.earlyCard}>
-        <View style={S.earlyTop}>
-          <View style={S.earlyBadge}>
-            <Text style={S.earlyBadgeText}>OFERTA EARLY ADOPTER</Text>
-          </View>
-          <Text style={S.earlyLimitado}>Solo 500 cupos</Text>
-        </View>
-        <Text style={S.earlyPrecio}>
-          ${PRECIOS.earlyAdopter_clp.toLocaleString('es-CL')} CLP
-          <Text style={S.earlyPeriodo}> / año</Text>
-        </Text>
-        <Text style={S.earlyDesc}>
-          Precio bloqueado de por vida. Sube cuando se agoten los cupos.
-        </Text>
-        <TouchableOpacity style={S.btnEarly} onPress={() => handleComprar('early')} activeOpacity={0.85} disabled={comprando}>
-          {comprando
-            ? <ActivityIndicator size="small" color="#1e4824" />
-            : <Text style={S.btnEarlyText}>Quiero mi lugar</Text>
-          }
-        </TouchableOpacity>
-      </View>
-
-      {/* Precios regulares */}
+      {/* Precios */}
       <View style={S.preciosRow}>
         <TouchableOpacity style={S.precioCard} onPress={() => handleComprar('mensual')} activeOpacity={0.75} disabled={comprando}>
           <Text style={S.precioLabel}>MENSUAL</Text>
@@ -138,7 +113,7 @@ export default function UpgradeScreen() {
           <Text style={S.precioNum}>${PRECIOS.anual_usd}</Text>
           <Text style={S.precioSub}>USD / año</Text>
           <View style={S.ahorroChip}>
-            <Text style={S.ahorroText}>AHORRAS 33%</Text>
+            <Text style={S.ahorroText}>AHORRAS 55%</Text>
           </View>
         </TouchableOpacity>
       </View>
@@ -171,10 +146,10 @@ export default function UpgradeScreen() {
 
       {/* Lo que nunca cambia */}
       <View style={S.siempreCard}>
-        <Text style={S.siempreLabel}>SIEMPRE GRATIS, PARA SIEMPRE</Text>
-        <Text style={S.siempreTitulo}>Diario, gratitud y descarga ilimitados.</Text>
+        <Text style={S.siempreLabel}>SIEMPRE INCLUIDO EN EL PLAN GRATIS</Text>
+        <Text style={S.siempreTitulo}>5 entradas al mes con análisis de IA.</Text>
         <Text style={S.siempreSub}>
-          Senti nunca te cobra por escribir o cuidarte. El plan gratuito es real, no un demo.
+          Sin tarjeta, sin trucos. El plan gratis es real y puedes usarlo todo el tiempo que quieras.
         </Text>
       </View>
 

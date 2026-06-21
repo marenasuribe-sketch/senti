@@ -1,135 +1,533 @@
 <!DOCTYPE html>
 <html lang="es">
+<!-- Política de Privacidad Senti — Ley 21.719 Chile + Google Play -->
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Senti — Privacidad y Términos</title>
+  <title>Política de Privacidad — Senti</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Manrope:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #fbf9f4;
-      --surface: #f5f4ed;
-      --title: #31332c;
-      --body: #5e6058;
-      --muted: #b1b3a9;
-      --accent: #3d6841;
+      --bg:       #fbf9f4;
+      --surface:  #f5f4ed;
+      --surface2: #efeee6;
+      --primary:  #3d6841;
+      --primary-c:#bfefbd;
+      --title:    #31332c;
+      --body:     #5e6058;
+      --muted:    #797c73;
+      --border:   rgba(177,179,169,0.25);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
     body {
       background: var(--bg);
       color: var(--body);
-      font-family: 'Manrope', sans-serif;
-      line-height: 1.6;
-      padding: 0 24px;
+      font-family: 'Manrope', -apple-system, sans-serif;
+      line-height: 1.7;
+      font-size: 15px;
     }
-    .wrap { max-width: 720px; margin: 0 auto; padding: 56px 0 80px; }
-    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-    .brand-dot { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); }
+    .wrap { max-width: 740px; margin: 0 auto; padding: 0 24px 96px; }
+
+    /* ─── Header ─── */
+    header {
+      padding: 56px 0 44px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 48px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
+    .brand-icon {
+      width: 38px; height: 38px; border-radius: 11px;
+      background: var(--primary);
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-weight: 800; font-size: 19px; color: #e4ffe0;
+    }
     .brand-name { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 20px; color: var(--title); }
-    .updated { font-size: 13px; color: var(--muted); margin-bottom: 40px; }
     h1 {
       font-family: 'Plus Jakarta Sans', sans-serif;
-      font-weight: 800; font-size: 30px; color: var(--title);
-      letter-spacing: -0.6px; margin: 40px 0 20px;
+      font-weight: 800; font-size: 34px; color: var(--title);
+      letter-spacing: -0.7px; line-height: 1.2;
+      margin-bottom: 10px;
     }
-    h1:first-of-type { margin-top: 0; }
-    .card {
+    .subtitle { font-size: 16px; color: var(--body); line-height: 1.6; margin-bottom: 18px; }
+    .pill {
+      display: inline-block;
       background: var(--surface);
-      border-radius: 16px;
-      padding: 22px 24px;
-      margin-bottom: 16px;
+      border-radius: 9999px;
+      padding: 6px 14px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+      letter-spacing: 0.02em;
     }
-    .card h2 {
+    .pill.verde { background: var(--primary-c); color: #1e4824; }
+
+    /* ─── Aviso datos sensibles ─── */
+    .aviso {
+      background: #fef3e2;
+      border-left: 3px solid #8a5010;
+      border-radius: 10px;
+      padding: 18px 22px;
+      margin-bottom: 48px;
+      font-size: 14px;
+      color: #5a3700;
+      line-height: 1.65;
+    }
+    .aviso strong { color: #8a5010; font-weight: 700; }
+
+    /* ─── Secciones ─── */
+    section { margin-bottom: 52px; }
+    h2 {
       font-family: 'Plus Jakarta Sans', sans-serif;
-      font-weight: 700; font-size: 16px; color: var(--title);
-      margin-bottom: 8px;
+      font-weight: 700; font-size: 21px; color: var(--primary);
+      margin-bottom: 18px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
     }
-    .card p { font-size: 15px; color: var(--body); }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    footer { margin-top: 48px; font-size: 13px; color: var(--muted); text-align: center; }
+    h3 { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 15px; color: var(--title); margin: 22px 0 8px; }
+    p { margin-bottom: 14px; }
+    ul, ol { padding-left: 22px; margin-bottom: 14px; }
+    li { margin-bottom: 7px; }
+    a { color: var(--primary); }
+    strong { color: var(--title); font-weight: 600; }
+    em { font-style: italic; }
+
+    /* ─── Tablas ─── */
+    .tabla-wrap { overflow-x: auto; margin: 18px 0 4px; border-radius: 12px; border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead th {
+      background: var(--primary);
+      color: #e4ffe0;
+      padding: 12px 16px;
+      text-align: left;
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    tbody tr { border-bottom: 1px solid var(--border); }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:nth-child(even) { background: var(--surface); }
+    tbody td { padding: 12px 16px; vertical-align: top; }
+    .badge {
+      display: inline-block;
+      border-radius: 9999px;
+      padding: 2px 10px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge.si { background: #fce4ec; color: #880e4f; }
+    .badge.no { background: var(--surface2); color: var(--muted); }
+
+    /* ─── Chips ─── */
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+    .chip {
+      background: var(--surface2);
+      border-radius: 9999px;
+      padding: 6px 14px;
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    /* ─── Grid de derechos ─── */
+    .derechos-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
+      gap: 12px;
+      margin: 18px 0;
+    }
+    .derecho-card {
+      background: var(--surface);
+      border-radius: 14px;
+      padding: 18px;
+    }
+    .derecho-card .icono { font-size: 22px; margin-bottom: 8px; }
+    .derecho-card .nombre { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 14px; color: var(--title); margin-bottom: 5px; }
+    .derecho-card .desc { font-size: 13px; color: var(--body); line-height: 1.5; }
+
+    /* ─── Caja de contacto ─── */
+    .contacto-box {
+      background: var(--primary);
+      border-radius: 20px;
+      padding: 30px;
+      color: rgba(228, 255, 224, 0.9);
+    }
+    .contacto-box .titulo { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 20px; color: #e4ffe0; margin-bottom: 14px; }
+    .contacto-box p { color: rgba(228,255,224,0.8); margin-bottom: 8px; font-size: 14px; }
+    .contacto-box a { color: var(--primary-c); font-weight: 600; }
+
+    /* ─── Footer ─── */
+    footer {
+      margin-top: 64px;
+      padding-top: 28px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.8;
+    }
+
+    @media (max-width: 480px) {
+      h1 { font-size: 26px; }
+      h2 { font-size: 18px; }
+      .derechos-grid { grid-template-columns: 1fr 1fr; }
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="brand">
-      <span class="brand-dot" aria-hidden="true"></span>
-      <span class="brand-name">Senti</span>
-    </div>
-    <p class="updated">Última actualización: 10 de junio de 2026</p>
 
-    <h1>Política de Privacidad</h1>
+    <!-- Header -->
+    <header>
+      <div class="brand">
+        <div class="brand-icon">S</div>
+        <span class="brand-name">Senti</span>
+      </div>
+      <h1>Política de Privacidad</h1>
+      <p class="subtitle">Cómo cuidamos tu información y qué derechos tienes sobre ella. Escrita en lenguaje claro, sin letra pequeña.</p>
+      <span class="pill verde">Ley 21.719 Chile</span>&nbsp;
+      <span class="pill">Actualizada: 19 de junio de 2026</span>
+    </header>
 
-    <div class="card">
-      <h2>Qué datos guardamos</h2>
-      <p>Senti guarda únicamente lo que tú escribes o grabas: entradas de diario, gratitudes, descargas emocionales y cartas a tu yo futuro. También guardamos tu email de Google para identificar tu cuenta.</p>
-    </div>
-
-    <div class="card">
-      <h2>Para qué usamos tus datos</h2>
-      <p>Tus datos se usan exclusivamente para mostrarte tu historial, analizar tus emociones con IA y hacer crecer tu planta. Nunca los usamos para publicidad, ni los vendemos a terceros.</p>
-    </div>
-
-    <div class="card">
-      <h2>Análisis con inteligencia artificial</h2>
-      <p>Cuando usas el Diario, tu texto se envía a la API de Anthropic (Claude) para generar el análisis emocional. Anthropic no almacena tus mensajes por defecto. El análisis se guarda en nuestra base de datos asociado únicamente a tu cuenta.</p>
+    <!-- Aviso datos sensibles -->
+    <div class="aviso">
+      <strong>Sobre tus datos de salud emocional:</strong> Senti procesa información sobre tu estado emocional y bienestar psicológico. Bajo la <strong>Ley 21.719 de Protección de Datos Personales de Chile</strong>, estos se consideran <strong>datos sensibles</strong> y reciben protección especial. Solo se usan para entregarte el servicio que tú eliges usar — nunca con fines publicitarios ni se comparten con terceros sin tu consentimiento explícito.
     </div>
 
-    <div class="card">
-      <h2>Transcripción de audio</h2>
-      <p>Si usas la función de audio, la grabación se envía a la API de OpenAI (Whisper) para transcribirla. OpenAI no retiene el audio una vez transcrito. Solo guardamos el texto resultante.</p>
-    </div>
+    <!-- 1. Quiénes somos -->
+    <section id="responsable">
+      <h2>1. Quiénes somos</h2>
+      <p><strong>Senti</strong> es una aplicación móvil de bienestar emocional personal. La responsable del tratamiento de tus datos es:</p>
+      <ul>
+        <li><strong>Nombre:</strong> Macarena Arenas Uribe</li>
+        <li><strong>País:</strong> Chile</li>
+        <li><strong>Correo:</strong> <a href="mailto:marenasuribe@gmail.com">marenasuribe@gmail.com</a></li>
+        <li><strong>Plataforma:</strong> Google Play (Android)</li>
+      </ul>
+      <p>Esta política cumple con la <strong>Ley 19.628 sobre Protección de la Vida Privada</strong>, la <strong>Ley 21.719 de Protección de Datos Personales</strong> (en implementación progresiva hasta finales de 2026) y los requisitos de privacidad de Google Play para aplicaciones de salud y bienestar.</p>
+    </section>
 
-    <div class="card">
-      <h2>Dónde se almacenan tus datos</h2>
-      <p>Tu información se almacena en Supabase (base de datos PostgreSQL en la nube). Los servidores están ubicados en la región US East. Tus datos están protegidos con autenticación y Row Level Security: ningún otro usuario puede leer tus entradas.</p>
-    </div>
+    <!-- 2. Qué datos recopilamos -->
+    <section id="datos">
+      <h2>2. Qué datos recopilamos y para qué</h2>
+      <p>Solo recopilamos lo que necesitamos para que Senti funcione. Aquí está todo, sin omisiones:</p>
 
-    <div class="card">
-      <h2>Acceso a tus datos</h2>
-      <p>Solo tú puedes ver tus entradas. El equipo de Senti no accede a tu contenido personal salvo en caso de requerimiento legal o para resolver un problema técnico que tú reportes.</p>
-    </div>
+      <div class="tabla-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Tipo de dato</th>
+              <th>Qué incluye</th>
+              <th>Para qué se usa</th>
+              <th>Sensible</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Datos de cuenta</strong></td>
+              <td>Correo electrónico, nombre (de tu cuenta Google)</td>
+              <td>Identificarte, vincular tu historial a tu cuenta</td>
+              <td><span class="badge no">No</span></td>
+            </tr>
+            <tr>
+              <td><strong>Diario personal</strong></td>
+              <td>Textos que escribes en el diario, gratitudes y descargas emocionales</td>
+              <td>Guardarlo para tu consulta y (con tu permiso) analizarlo con IA</td>
+              <td><span class="badge si">Sí — emocional</span></td>
+            </tr>
+            <tr>
+              <td><strong>Análisis emocional</strong></td>
+              <td>Puntuaciones de estrés, calma y energía generadas por IA a partir de tu diario</td>
+              <td>Mostrarte estadísticas de bienestar semanales</td>
+              <td><span class="badge si">Sí — psicológico</span></td>
+            </tr>
+            <tr>
+              <td><strong>Audio (voz)</strong></td>
+              <td>Grabación de voz cuando usas la función de micrófono</td>
+              <td>Transcribir a texto. El audio se elimina inmediatamente. Nunca se almacena.</td>
+              <td><span class="badge si">Sí — voz</span></td>
+            </tr>
+            <tr>
+              <td><strong>Respuestas de onboarding</strong></td>
+              <td>Tus 5 respuestas iniciales sobre estado emocional y expectativas</td>
+              <td>Personalizar tu experiencia desde el primer día</td>
+              <td><span class="badge si">Sí — emocional</span></td>
+            </tr>
+            <tr>
+              <td><strong>Progreso de tu planta</strong></td>
+              <td>Gotas acumuladas, etapa de crecimiento, planta elegida</td>
+              <td>Gamificación de tu constancia</td>
+              <td><span class="badge no">No</span></td>
+            </tr>
+            <tr>
+              <td><strong>Logros y racha</strong></td>
+              <td>Logros desbloqueados, días consecutivos de uso</td>
+              <td>Mostrar tu avance y motivarte</td>
+              <td><span class="badge no">No</span></td>
+            </tr>
+            <tr>
+              <td><strong>Cápsulas del tiempo</strong></td>
+              <td>Mensajes que te escribes a ti misma para el futuro</td>
+              <td>Guardarlos hasta la fecha que tú elegiste</td>
+              <td><span class="badge si">Sí — emocional</span></td>
+            </tr>
+            <tr>
+              <td><strong>Plan de suscripción</strong></td>
+              <td>Plan activo (gratis o Senti+), fecha de renovación</td>
+              <td>Habilitarte el acceso a las funciones de tu plan</td>
+              <td><span class="badge no">No</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
-    <div class="card">
-      <h2>Cuánto tiempo guardamos tus datos</h2>
-      <p>Tus datos se conservan mientras tengas una cuenta activa. Si eliminas tu cuenta, todos tus datos son borrados permanentemente dentro de 30 días.</p>
-    </div>
+      <h3>Datos que NO recopilamos</h3>
+      <div class="chips">
+        <span class="chip">📍 Ubicación GPS</span>
+        <span class="chip">👥 Contactos</span>
+        <span class="chip">📷 Fotos o cámara</span>
+        <span class="chip">🌐 Historial de navegación</span>
+        <span class="chip">📱 Datos de otras apps</span>
+        <span class="chip">📞 Número de teléfono</span>
+        <span class="chip">🔑 Contraseñas</span>
+        <span class="chip">💳 Datos de tarjetas (gestionados por Google Play)</span>
+      </div>
+    </section>
 
-    <div class="card">
-      <h2>Tus derechos</h2>
-      <p>Tienes derecho a acceder, corregir o eliminar tu información en cualquier momento. Para ejercerlos escríbenos a <a href="mailto:privacidad@senti.app">privacidad@senti.app</a>.</p>
-    </div>
+    <!-- 3. Base legal -->
+    <section id="base-legal">
+      <h2>3. Base legal del tratamiento</h2>
+      <p>Tratamos tus datos en base a (Art. 13 y 16 Ley 21.719):</p>
+      <ul>
+        <li><strong>Tu consentimiento explícito</strong> — Al crear una cuenta y usar la app, aceptas el tratamiento de tus datos de bienestar. Puedes revocarlo en cualquier momento eliminando tu cuenta.</li>
+        <li><strong>Ejecución del servicio</strong> — Para guardarte el diario, mostrarte tu planta y darte acceso a tu historial.</li>
+        <li><strong>Interés legítimo</strong> — Para el funcionamiento técnico, la seguridad de los datos y la detección de errores.</li>
+      </ul>
+      <p>Para datos sensibles (diario emocional, análisis psicológico, grabaciones de voz), la única base legal es <strong>tu consentimiento explícito e informado</strong>, conforme al Art. 16 de la Ley 21.719. Puedes revocar este consentimiento en cualquier momento.</p>
+    </section>
 
-    <h1>Términos de Uso</h1>
+    <!-- 4. Con quién compartimos -->
+    <section id="terceros">
+      <h2>4. Con quién compartimos tus datos</h2>
+      <p>Trabajamos con los siguientes proveedores de servicios (<em>encargados del tratamiento</em>). Todos están bajo contrato y obligados a proteger tu información:</p>
 
-    <div class="card">
-      <h2>Uso permitido</h2>
-      <p>Senti es una herramienta de bienestar personal. Puedes usarla para tu propio cuidado emocional. No está permitido usar la app para fines ilegales, compartir acceso con terceros ni intentar acceder a datos de otros usuarios.</p>
-    </div>
+      <div class="tabla-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Proveedor</th>
+              <th>País</th>
+              <th>Función</th>
+              <th>Datos que recibe</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Supabase</strong></td>
+              <td>EE.UU.</td>
+              <td>Base de datos y autenticación</td>
+              <td>Todos tus datos (almacenados con cifrado, protegidos por RLS)</td>
+            </tr>
+            <tr>
+              <td><strong>Google</strong></td>
+              <td>EE.UU.</td>
+              <td>Inicio de sesión (OAuth)</td>
+              <td>Tu nombre y correo de Google</td>
+            </tr>
+            <tr>
+              <td><strong>Anthropic (Claude)</strong></td>
+              <td>EE.UU.</td>
+              <td>Análisis emocional con IA</td>
+              <td>El texto de tu diario, solo cuando presionas "Reflejar". No se entrena con tus datos.</td>
+            </tr>
+            <tr>
+              <td><strong>OpenAI (Whisper)</strong></td>
+              <td>EE.UU.</td>
+              <td>Transcripción de audio</td>
+              <td>El audio de voz (se elimina inmediatamente tras transcribir; nunca se almacena)</td>
+            </tr>
+            <tr>
+              <td><strong>RevenueCat</strong></td>
+              <td>EE.UU.</td>
+              <td>Gestión de suscripciones</td>
+              <td>ID anónimo de usuario y estado de suscripción</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
-    <div class="card">
-      <h2>No es atención médica</h2>
-      <p>Senti no es un servicio de salud mental ni reemplaza la atención profesional. Si estás en crisis, comunícate con un profesional de salud mental o una línea de emergencia en tu país.</p>
-    </div>
+      <p><strong>Transferencias internacionales:</strong> Todos los proveedores están en Estados Unidos. Hemos verificado que cada uno mantiene estándares equivalentes de protección de datos, en cumplimiento del Art. 27 de la Ley 21.719.</p>
+      <p><strong>No vendemos ni cedemos</strong> tus datos a anunciantes, corredores de datos ni terceros con fines comerciales. Nunca.</p>
+    </section>
 
-    <div class="card">
-      <h2>Propiedad intelectual</h2>
-      <p>El contenido de la app (diseño, textos, lógica) pertenece a Senti. Tus entradas personales son tuyas — Senti no reclama propiedad sobre lo que escribes.</p>
-    </div>
+    <!-- 5. Seguridad -->
+    <section id="seguridad">
+      <h2>5. Cómo protegemos tu información</h2>
+      <ul>
+        <li><strong>Cifrado en tránsito:</strong> Toda comunicación entre la app y nuestros servidores usa HTTPS/TLS 1.3.</li>
+        <li><strong>Aislamiento estricto:</strong> Cada usuaria solo puede acceder a sus propios datos. Es técnicamente imposible que una usuaria lea el diario de otra (control de acceso a nivel de fila — Row Level Security en la base de datos).</li>
+        <li><strong>Claves de IA solo en servidor:</strong> Las claves de Anthropic (Claude) y OpenAI (Whisper) nunca se envían al dispositivo. Solo existen en servidores privados.</li>
+        <li><strong>Premium verificado en servidor:</strong> El estado Senti+ solo puede activarse desde nuestro servidor — la app no puede autoasignarse privilegios.</li>
+        <li><strong>Audio transitorio:</strong> Las grabaciones de voz nunca se guardan. Se envían directamente al servicio de transcripción y se eliminan en menos de 60 segundos.</li>
+        <li><strong>Notificación de brechas:</strong> Si ocurre una brecha de seguridad que afecte tus datos, te notificaremos dentro de los 30 días siguientes, conforme al Art. 49 de la Ley 21.719.</li>
+      </ul>
+    </section>
 
-    <div class="card">
-      <h2>Cambios en el servicio</h2>
-      <p>Podemos actualizar estas políticas o el servicio con aviso previo por email. El uso continuado de la app después del aviso implica aceptación de los cambios.</p>
-    </div>
+    <!-- 6. Plazos de conservación -->
+    <section id="plazos">
+      <h2>6. Por cuánto tiempo guardamos tus datos</h2>
+      <div class="tabla-wrap">
+        <table>
+          <thead>
+            <tr><th>Dato</th><th>Plazo de conservación</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Diario, gratitudes, descargas emocionales, cápsulas</td>
+              <td>Mientras tu cuenta esté activa + 30 días después de eliminarla</td>
+            </tr>
+            <tr>
+              <td>Audio de voz</td>
+              <td>Inmediato — menos de 60 segundos (solo durante la transcripción)</td>
+            </tr>
+            <tr>
+              <td>Análisis emocional (estrés, calma, energía)</td>
+              <td>Mientras tu cuenta esté activa</td>
+            </tr>
+            <tr>
+              <td>Respuestas del onboarding</td>
+              <td>Mientras tu cuenta esté activa</td>
+            </tr>
+            <tr>
+              <td>Datos de cuenta (correo, nombre)</td>
+              <td>Mientras tu cuenta esté activa + 90 días por seguridad</td>
+            </tr>
+            <tr>
+              <td>Registros técnicos de error</td>
+              <td>30 días (eliminación automática)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
 
-    <div class="card">
-      <h2>Contacto</h2>
-      <p>¿Preguntas? Escríbenos a <a href="mailto:hola@senti.app">hola@senti.app</a></p>
-    </div>
+    <!-- 7. Tus derechos ARCO+ -->
+    <section id="derechos">
+      <h2>7. Tus derechos — Ley 21.719 (ARCO+)</h2>
+      <p>Como titular de datos personales en Chile, tienes los siguientes derechos. Para ejercerlos, escríbenos a <a href="mailto:marenasuribe@gmail.com">marenasuribe@gmail.com</a> con el asunto <em>"Derecho ARCO+ Senti"</em> — respondemos en un plazo máximo de <strong>30 días hábiles</strong>.</p>
 
-    <footer>© 2026 Senti — Diario de bienestar</footer>
+      <div class="derechos-grid">
+        <div class="derecho-card">
+          <div class="icono">🔍</div>
+          <div class="nombre">Acceso</div>
+          <div class="desc">Saber exactamente qué datos guardamos sobre ti y cómo los usamos.</div>
+        </div>
+        <div class="derecho-card">
+          <div class="icono">✏️</div>
+          <div class="nombre">Rectificación</div>
+          <div class="desc">Corregir datos incorrectos o desactualizados en tu cuenta.</div>
+        </div>
+        <div class="derecho-card">
+          <div class="icono">🗑️</div>
+          <div class="nombre">Supresión</div>
+          <div class="desc">Solicitar la eliminación permanente de todos tus datos (derecho al olvido).</div>
+        </div>
+        <div class="derecho-card">
+          <div class="icono">🚫</div>
+          <div class="nombre">Oposición</div>
+          <div class="desc">Oponerte a ciertos tratamientos de tus datos, incluyendo decisiones automatizadas.</div>
+        </div>
+        <div class="derecho-card">
+          <div class="icono">📦</div>
+          <div class="nombre">Portabilidad</div>
+          <div class="desc">Recibir todos tus datos en formato descargable (JSON o CSV) para llevarlos donde quieras.</div>
+        </div>
+        <div class="derecho-card">
+          <div class="icono">↩️</div>
+          <div class="nombre">Revocación</div>
+          <div class="desc">Retirar tu consentimiento en cualquier momento, sin penalización ni pérdida de datos previos.</div>
+        </div>
+      </div>
+
+      <h3>Cómo eliminar tu cuenta y todos tus datos</h3>
+      <p>Envía un correo a <a href="mailto:marenasuribe@gmail.com">marenasuribe@gmail.com</a> con el asunto <em>"Eliminar mi cuenta Senti"</em>. Ejecutamos la eliminación completa en un plazo máximo de 30 días y te confirmamos cuando esté lista.</p>
+    </section>
+
+    <!-- 8. Menores -->
+    <section id="menores">
+      <h2>8. Menores de edad</h2>
+      <p>Senti está destinada a personas de <strong>14 años o más</strong>, conforme al Art. 16 bis de la Ley 21.719. Los menores de 14 años requieren el consentimiento expreso de su madre, padre o tutor legal para usar la app.</p>
+      <p>No recopilamos datos de menores de 14 años de forma consciente. Si detectamos que un usuario tiene menos de 14 años sin consentimiento parental verificable, eliminamos su cuenta de inmediato.</p>
+    </section>
+
+    <!-- 9. Inteligencia Artificial -->
+    <section id="ia">
+      <h2>9. Inteligencia Artificial — qué hace y qué no hace</h2>
+      <ul>
+        <li><strong>No es diagnóstico médico:</strong> El análisis emocional es orientativo y no constituye diagnóstico psicológico ni psiquiátrico. Senti no reemplaza la atención de un profesional de salud mental.</li>
+        <li><strong>Sin entrenamiento con tus datos:</strong> Anthropic (creadores de Claude) no usa el contenido de tus diarios para entrenar sus modelos de IA. El texto se procesa solo en el momento del análisis.</li>
+        <li><strong>Sin decisiones automáticas con efecto jurídico:</strong> Ninguna decisión que afecte tus derechos se toma de forma exclusivamente automática, de conformidad con el Art. 30 de la Ley 21.719.</li>
+        <li><strong>Es completamente opcional:</strong> El análisis de IA ocurre solo cuando tú presionas "Reflejar". Puedes escribir en tu diario indefinidamente sin activar la IA.</li>
+        <li><strong>Transparencia del proceso:</strong> La IA analiza el texto que escribiste y genera una perspectiva emocional. No tiene acceso a tus datos personales fuera del texto que le envías en ese momento.</li>
+      </ul>
+    </section>
+
+    <!-- 10. Cookies y analytics -->
+    <section id="analytics">
+      <h2>10. Cookies y análisis de uso</h2>
+      <p>Senti <strong>no usa cookies</strong> (es una app móvil nativa, no un sitio web). No usamos herramientas de analítica de comportamiento de terceros como Google Analytics, Mixpanel, Amplitude ni similares.</p>
+      <p>Los únicos registros técnicos que existen son logs de errores necesarios para detectar y corregir bugs en la app. Se eliminan automáticamente a los 30 días.</p>
+    </section>
+
+    <!-- 11. Cambios -->
+    <section id="cambios">
+      <h2>11. Cambios a esta política</h2>
+      <p>Si realizamos cambios materiales a esta política (nuevos tipos de datos, nuevos proveedores, cambios en derechos), te avisaremos con al menos <strong>15 días de anticipación</strong> mediante una notificación dentro de la app.</p>
+      <p>Los cambios menores (corrección de errores, actualización de datos de contacto) se reflejan en esta página sin aviso previo, pero siempre queda visible la fecha de última actualización. El uso continuado de Senti después de los cambios materiales implica tu aceptación.</p>
+    </section>
+
+    <!-- 12. Autoridad de control -->
+    <section id="autoridad">
+      <h2>12. Autoridad de control</h2>
+      <p>Si consideras que tus derechos no han sido respetados, puedes presentar un reclamo ante la <strong>Agencia Nacional de Protección de Datos (ANPD)</strong> de Chile, una vez que esté operativa conforme al calendario de implementación de la Ley 21.719.</p>
+      <p>Mientras tanto, puedes contactarnos directamente o acudir al <strong>Consejo para la Transparencia</strong> para orientación adicional.</p>
+    </section>
+
+    <!-- Términos de uso (breve) -->
+    <section id="terminos">
+      <h2>13. Términos de uso</h2>
+      <ul>
+        <li><strong>Uso personal:</strong> Senti es para tu propio cuidado emocional. No está permitido usarla para fines ilegales, compartir acceso ni acceder a datos de otros usuarios.</li>
+        <li><strong>No es atención médica:</strong> Senti no es un servicio de salud mental. Si estás en crisis, comunícate con un profesional o una línea de emergencia.</li>
+        <li><strong>Propiedad de tus datos:</strong> El contenido que escribes en Senti es tuyo. Senti no reclama propiedad intelectual sobre tus diarios, gratitudes ni descargas.</li>
+        <li><strong>Disponibilidad:</strong> Nos esforzamos por mantener la app disponible, pero no garantizamos disponibilidad continua. Avisaremos ante mantenimientos planificados.</li>
+      </ul>
+    </section>
+
+    <!-- Contacto -->
+    <section id="contacto">
+      <div class="contacto-box">
+        <div class="titulo">Preguntas, solicitudes o reclamos</div>
+        <p>Respondemos a todas las solicitudes relacionadas con privacidad en un plazo máximo de <strong>30 días hábiles</strong>.</p>
+        <p><strong>Correo:</strong> <a href="mailto:marenasuribe@gmail.com">marenasuribe@gmail.com</a></p>
+        <p><strong>Asunto recomendado:</strong> <em>"Privacidad Senti — [tu solicitud]"</em></p>
+        <p style="margin-top: 18px; font-size: 13px; opacity: 0.65;">
+          Senti · Aplicación de bienestar emocional · Chile<br>
+          Ley 21.719 de Protección de Datos Personales
+        </p>
+      </div>
+    </section>
+
+    <footer>
+      <p><strong>Política de Privacidad de Senti</strong> · Última actualización: 19 de junio de 2026</p>
+      <p style="margin-top: 6px;">Cumple con la <strong>Ley 21.719</strong> de Protección de Datos Personales de Chile y las políticas de Google Play para aplicaciones de salud y bienestar.</p>
+      <p style="margin-top: 6px;">© 2026 Senti — Diario de bienestar emocional</p>
+    </footer>
+
   </div>
 </body>
 </html>

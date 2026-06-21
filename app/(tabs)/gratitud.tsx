@@ -10,6 +10,7 @@ import { supabase } from '../../lib/supabase';
 import { transcribirAudio } from '../../lib/edge';
 import { sumarGotas } from '../../lib/planta';
 import { LIMITES_TEXTO, superaLimite } from '../../lib/validation';
+import { contarEntradasMes, LIMITES } from '../../lib/premium';
 import { verificarLogros, type Logro } from '../../lib/logros';
 import { usePremium } from '../../hooks/usePremium';
 import SentiLogo from '../../components/SentiLogo';
@@ -150,6 +151,25 @@ export default function GratitudScreen() {
     const userId = session?.user?.id;
     if (!userId) { setAviso({ titulo: 'No hay sesión activa', mensaje: 'Vuelve a iniciar sesión para guardar tus gratitudes.', icono: 'alert-circle-outline' }); setGuardando(false); return; }
 
+    const entradasMes = await contarEntradasMes(supabase, userId);
+    const limite = esPremium ? LIMITES.premium.entradas_porMes : LIMITES.gratis.entradas_porMes;
+    if (entradasMes >= limite) {
+      if (esPremium) {
+        setAviso({ titulo: 'Límite del mes alcanzado', mensaje: 'Llegaste a 30 entradas este mes. Se renueva el 1 del mes que viene.', icono: 'calendar-outline' });
+      } else {
+        setAviso({
+          titulo: 'Usaste tus 5 entradas del mes',
+          mensaje: 'El plan gratuito incluye 5 entradas al mes entre el diario, gratitud y descarga. Con Senti+ tienes 30 al mes + audio.',
+          icono: 'lock-closed', iconoBg: '#eee1cc', iconoColor: '#595141',
+          botones: [
+            { texto: 'Ver Senti+', variante: 'primario', onPress: () => router.push('/upgrade') },
+            { texto: 'Ahora no', variante: 'secundario' },
+          ],
+        });
+      }
+      setGuardando(false); return;
+    }
+
     const partes: string[] = [];
     if (momento.trim())  partes.push(`Momento: ${momento.trim()}`);
     if (persona.trim())  partes.push(`Persona: ${persona.trim()}`);
@@ -265,7 +285,7 @@ export default function GratitudScreen() {
 
           <View style={S.anclajeBlock}>
             <View style={S.anclajeLabelRow}>
-              <Text style={S.anclajeLabel}>ALGUIEN QUE AGRADECES</Text>
+              <Text style={S.anclajeLabel}>ALGUIEN A QUIEN AGRADECES</Text>
               <MicBtn campo="persona" />
             </View>
             <TextInput
