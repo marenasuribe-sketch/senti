@@ -68,6 +68,7 @@ export default function JournalScreen() {
   const [aviso, setAviso] = useState<AvisoConfig | null>(null);
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   async function handleMic() {
     if (!esPremium) {
@@ -100,11 +101,15 @@ export default function JournalScreen() {
       } finally { setTranscribing(false); }
     } else {
       // Iniciar grabación
-      const { granted } = await AudioModule.requestRecordingPermissionsAsync();
-      if (!granted) { setAviso({ titulo: 'Permiso denegado', mensaje: 'Senti necesita acceso al micrófono para grabar tu voz.', icono: 'mic-off-outline' }); return; }
-      await recorder.prepareToRecordAsync();
-      recorder.record();
-      setIsRecording(true);
+      try {
+        const { granted } = await AudioModule.requestRecordingPermissionsAsync();
+        if (!granted) { setAviso({ titulo: 'Permiso denegado', mensaje: 'Senti necesita acceso al micrófono para grabar tu voz.', icono: 'mic-off-outline' }); return; }
+        await recorder.prepareToRecordAsync();
+        recorder.record();
+        setIsRecording(true);
+      } catch (e: any) {
+        setAviso({ titulo: 'No se pudo iniciar la grabación', mensaje: e?.message ?? 'Intenta de nuevo.', icono: 'mic-off-outline' });
+      }
     }
   }
 
@@ -125,12 +130,16 @@ export default function JournalScreen() {
     const { data: { session } } = await supabase.auth.getSession();
     const userId = session?.user?.id;
     if (!userId) return;
-    await supabase.from('consejos_guardados').insert({
+    const { error: consejoError } = await supabase.from('consejos_guardados').insert({
       user_id: userId,
       consejo: result.consejo,
       reflexion: result.reflexion,
       emociones: result.emociones,
     });
+    if (consejoError) {
+      setAviso({ titulo: 'No se pudo guardar', mensaje: 'Intenta de nuevo.', icono: 'alert-circle-outline' });
+      return;
+    }
     setConsejoGuardado(true);
   }
 
@@ -168,25 +177,24 @@ export default function JournalScreen() {
       const calm    = analysis.emociones.find(e => e.label === 'Calma')?.valor   ?? 0;
       const energy  = analysis.emociones.find(e => e.label === 'Energía')?.valor ?? 0;
 
-      await supabase.from('journal').insert({
+      const { error: insertError } = await supabase.from('journal').insert({
         user_id: userId, texto: text,
         estres: stress, calma: calm, energia: energy,
       });
+      if (insertError) throw new Error('No se pudo guardar tu entrada. Intenta de nuevo.');
 
       const sumar = await sumarGotas(supabase, userId, 3);
       if (sumar.subio) {
         setCelebracion({ etapa: sumar.etapaDespues, plantaId: sumar.plantaId });
       }
 
-      // Verificar logros
-      const nuevosLogros = await verificarLogros(supabase, userId, {
-        tipo: 'journal',
-        estres: stress,
-      });
-      if (nuevosLogros.length > 0) {
-        setLogros(nuevosLogros);
-        setLogroIdx(0);
-      }
+      try {
+        const nuevosLogros = await verificarLogros(supabase, userId, {
+          tipo: 'journal',
+          estres: stress,
+        });
+        if (nuevosLogros.length > 0) { setLogros(nuevosLogros); setLogroIdx(0); }
+      } catch { /* logros no son críticos */ }
 
       setResult(analysis);
     } catch (e: any) {
@@ -251,7 +259,8 @@ export default function JournalScreen() {
             value={text}
             onChangeText={(t) => {
               setText(t);
-              setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 80);
+              if (scrollTimer.current) clearTimeout(scrollTimer.current);
+              scrollTimer.current = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 80);
             }}
             maxLength={LIMITES_TEXTO.journal}
             editable={!loading && !result}

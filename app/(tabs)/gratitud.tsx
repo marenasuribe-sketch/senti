@@ -64,6 +64,7 @@ export default function GratitudScreen() {
   const [racha, setRacha]       = useState(0);
   const [grabandoCampo, setGrabandoCampo] = useState<Campo | null>(null);
   const [transcribing, setTranscribing]   = useState(false);
+  const [cambiandoAudio, setCambiandoAudio] = useState(false);
 
   const [celebracion, setCelebracion] = useState<{ etapa: number; plantaId: string | null } | null>(null);
   const [logros, setLogros]           = useState<Logro[]>([]);
@@ -127,15 +128,21 @@ export default function GratitudScreen() {
         }
       } finally { setTranscribing(false); }
     } else {
-      // Iniciar grabación
-      if (grabandoCampo) {
-        await recorder.stop(); // parar el campo anterior si hay
+      // Iniciar grabación — mutex para evitar double-tap entre campos
+      if (cambiandoAudio) return;
+      try {
+        setCambiandoAudio(true);
+        if (grabandoCampo) await recorder.stop();
+        const { granted } = await AudioModule.requestRecordingPermissionsAsync();
+        if (!granted) { setAviso({ titulo: 'Permiso denegado', mensaje: 'Senti necesita acceso al micrófono para grabar tu voz.', icono: 'mic-off-outline' }); return; }
+        await recorder.prepareToRecordAsync();
+        recorder.record();
+        setGrabandoCampo(campo);
+      } catch (e: any) {
+        setAviso({ titulo: 'No se pudo iniciar la grabación', mensaje: e?.message ?? 'Intenta de nuevo.', icono: 'mic-off-outline' });
+      } finally {
+        setCambiandoAudio(false);
       }
-      const { granted } = await AudioModule.requestRecordingPermissionsAsync();
-      if (!granted) { setAviso({ titulo: 'Permiso denegado', mensaje: 'Senti necesita acceso al micrófono para grabar tu voz.', icono: 'mic-off-outline' }); return; }
-      await recorder.prepareToRecordAsync();
-      recorder.record();
-      setGrabandoCampo(campo);
     }
   }
 
@@ -192,16 +199,11 @@ export default function GratitudScreen() {
         setCelebracion({ etapa: sumar.etapaDespues, plantaId: sumar.plantaId });
       }
 
-      // Verificar logros
-      const tresAnclajes = !!(momento.trim() && persona.trim() && victoria.trim());
-      const nuevosLogros = await verificarLogros(supabase, userId, {
-        tipo: 'gratitud',
-        tresAnclajes,
-      });
-      if (nuevosLogros.length > 0) {
-        setLogros(nuevosLogros);
-        setLogroIdx(0);
-      }
+      try {
+        const tresAnclajes = !!(momento.trim() && persona.trim() && victoria.trim());
+        const nuevosLogros = await verificarLogros(supabase, userId, { tipo: 'gratitud', tresAnclajes });
+        if (nuevosLogros.length > 0) { setLogros(nuevosLogros); setLogroIdx(0); }
+      } catch { /* logros no son críticos */ }
     }
     setGuardando(false);
   }
@@ -222,7 +224,7 @@ export default function GratitudScreen() {
         style={[S.micMini, activo && S.micMiniActive]}
         onPress={() => handleMic(campo)}
         activeOpacity={0.7}
-        disabled={transcribing}
+        disabled={transcribing || cambiandoAudio}
       >
         {transcribing && grabandoCampo === campo ? (
           <ActivityIndicator size="small" color="#3d6841" />

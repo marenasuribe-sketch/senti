@@ -145,16 +145,14 @@ export default function DescargaScreen() {
       setCelebracion({ etapa: sumar.etapaDespues, plantaId: sumar.plantaId });
     }
 
-    // Verificar logros
-    const nuevosLogros = await verificarLogros(supabase, userId, {
-      tipo: 'descarga',
-      tags: tagsSel,
-      viaAudio: usedAudio,
-    });
-    if (nuevosLogros.length > 0) {
-      setLogros(nuevosLogros);
-      setLogroIdx(0);
-    }
+    try {
+      const nuevosLogros = await verificarLogros(supabase, userId, {
+        tipo: 'descarga',
+        tags: tagsSel,
+        viaAudio: usedAudio,
+      });
+      if (nuevosLogros.length > 0) { setLogros(nuevosLogros); setLogroIdx(0); }
+    } catch { /* logros no son críticos */ }
 
     setGuardado(true);
     setGuardando(false);

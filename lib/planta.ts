@@ -119,14 +119,17 @@ export async function sumarGotas(
 
   const puntosAntes   = planta.puntos ?? 0;
   const puntosDespues = puntosAntes + cantidad;
+  const etapaAntes    = etapaPara(puntosAntes);
+  const etapaDespues  = etapaPara(puntosDespues);
 
-  await supabase
+  const { error: updateError } = await supabase
     .from('plantas_usuario')
     .update({ puntos: puntosDespues })
     .eq('user_id', userId);
 
-  const etapaAntes   = etapaPara(puntosAntes);
-  const etapaDespues = etapaPara(puntosDespues);
+  if (updateError) {
+    return { etapaAntes, etapaDespues: etapaAntes, subio: false, plantaId: planta.nombre ?? null };
+  }
 
   return {
     etapaAntes,
