@@ -171,7 +171,14 @@ export default function EstadoScreen() {
   async function cargar() {
     setCargando(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      let session = null;
+      try {
+        const { data } = await supabase.auth.getSession();
+        session = data.session;
+      } catch {
+        setCargando(false);
+        return;
+      }
       const userId = session?.user?.id;
       if (!userId) { setCargando(false); return; }
 
@@ -236,6 +243,12 @@ export default function EstadoScreen() {
       const totalSemana = (journals ?? []).filter(j => j.created_at >= semanaInicio).length
         + (gratitudes ?? []).filter(g => g.created_at >= semanaInicio).length;
       setTotalEntradas(totalSemana);
+    } catch {
+      setAviso({
+        titulo: 'Sin conexión',
+        mensaje: 'No pudimos cargar tus datos. Revisa tu conexión e intenta de nuevo.',
+        icono: 'wifi-outline',
+      });
     } finally {
       setCargando(false);
     }

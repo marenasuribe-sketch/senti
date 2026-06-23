@@ -64,11 +64,16 @@ export default function CapsulaAperturaScreen() {
 
   async function handleCerrar(conRespuesta?: string) {
     setGuardando(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    const userId = session?.user?.id;
-    if (userId) await marcarAbierta(supabase, id, userId, conRespuesta);
-    setGuardando(false);
-    router.replace('/(tabs)');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (userId) await marcarAbierta(supabase, id, userId, conRespuesta);
+    } catch {
+      // Si falla el guardado, navegar igual — la cápsula se puede re-abrir la próxima vez
+    } finally {
+      setGuardando(false);
+      router.replace('/(tabs)');
+    }
   }
 
   async function handleGuardarRespuesta() {

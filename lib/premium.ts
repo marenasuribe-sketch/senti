@@ -48,13 +48,18 @@ export async function contarAudiosMes(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<number> {
-  const { count } = await supabase
-    .from('journal')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', userId)
-    .eq('via_audio', true)
-    .gte('created_at', inicioMesActual());
-  return count ?? 0;
+  try {
+    const { count, error } = await supabase
+      .from('journal')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('via_audio', true)
+      .gte('created_at', inicioMesActual());
+    if (error) return 9999;
+    return count ?? 0;
+  } catch {
+    return 9999;
+  }
 }
 
 export type Perfil = {

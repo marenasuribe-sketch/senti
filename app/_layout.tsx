@@ -59,7 +59,15 @@ export default function RootLayout() {
 
     let cancelled = false;
     async function check() {
-      const { data: { session } } = await supabase.auth.getSession();
+      let session = null;
+      try {
+        const { data } = await supabase.auth.getSession();
+        session = data.session;
+      } catch {
+        // Si Supabase falla al arrancar, redirigir a onboarding como fallback seguro
+        if (!cancelled) { setReady(true); router.replace('/onboarding'); }
+        return;
+      }
       if (cancelled) return;
 
       const inOnboarding = segments[0] === 'onboarding';
@@ -74,7 +82,10 @@ export default function RootLayout() {
       }
 
       // Con sesión → chequear si completó onboarding
-      const completed = await AsyncStorage.getItem('onboarding_complete');
+      let completed = null;
+      try {
+        completed = await AsyncStorage.getItem('onboarding_complete');
+      } catch { /* AsyncStorage puede fallar en primeros boots — tratar como no completado */ }
       if (cancelled) return;
 
       if (completed === 'true') {

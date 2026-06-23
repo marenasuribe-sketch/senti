@@ -32,9 +32,22 @@ Deno.serve(async (req) => {
     if (!texto || texto.trim().length < 10) return json({ error: 'Texto demasiado corto' }, 400);
     if (texto.length > MAX_TEXTO_CHARS) return json({ error: 'Texto demasiado largo' }, 400);
 
-    // 3. Verificar plan del usuario (sin límite aquí — el cliente chequea entradas del mes)
-    const perfil = await supabase.from('perfiles').select('es_premium').eq('user_id', user.id).maybeSingle();
-    const esPremium = perfil.data?.es_premium ?? false;
+    // 3. Verificar plan del usuario + aplicar límite server-side de entradas del mes
+    const perfil = await supabase.from('perfiles').select('es_premium, premium_hasta').eq('user_id', user.id).maybeSingle();
+    const premiumHasta = perfil.data?.premium_hasta;
+    const esPremium = (perfil.data?.es_premium ?? false) && (!premiumHasta || new Date(premiumHasta) > new Date());
+
+    // Límite server-side: evita que clientes maliciosos llamen directamente a la función
+    const limiteEntradas = esPremium ? 30 : 5;
+    const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0, 0, 0, 0);
+    const [{ count: cJournal }, { count: cGratitudes }] = await Promise.all([
+      supabase.from('journal').select('*', { count: 'exact', head: true }).eq('user_id', user.id).gte('created_at', inicioMes.toISOString()),
+      supabase.from('gratitudes').select('*', { count: 'exact', head: true }).eq('user_id', user.id).gte('created_at', inicioMes.toISOString()),
+    ]);
+    const totalEntradas = (cJournal ?? 0) + (cGratitudes ?? 0);
+    if (totalEntradas > limiteEntradas) {
+      return json({ error: 'Límite de entradas del mes alcanzado' }, 429);
+    }
 
     // 4. Recuperar contexto histórico según plan
     // Premium: últimos 60 días (~2 meses de patrones)

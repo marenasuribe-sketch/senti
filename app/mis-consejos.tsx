@@ -28,15 +28,20 @@ export default function MisConsejosScreen() {
 
   useEffect(() => {
     async function cargar() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { setCargando(false); return; }
-      const { data } = await supabase
-        .from('consejos_guardados')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .order('created_at', { ascending: false });
-      setConsejos(data ?? []);
-      setCargando(false);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) { return; }
+        const { data } = await supabase
+          .from('consejos_guardados')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .order('created_at', { ascending: false });
+        setConsejos(data ?? []);
+      } catch {
+        // Error de red: lista vacía, sin crash
+      } finally {
+        setCargando(false);
+      }
     }
     cargar();
   }, []);

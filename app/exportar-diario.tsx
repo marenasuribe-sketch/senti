@@ -94,15 +94,20 @@ export default function ExportarDiarioScreen() {
 
   useEffect(() => {
     async function cargar() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { setCargando(false); return; }
-      const { data } = await supabase
-        .from('journal')
-        .select('id, texto, estres, calma, energia, es_descarga, created_at')
-        .eq('user_id', session.user.id)
-        .order('created_at', { ascending: false });
-      setEntradas(data ?? []);
-      setCargando(false);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) { return; }
+        const { data } = await supabase
+          .from('journal')
+          .select('id, texto, estres, calma, energia, es_descarga, created_at')
+          .eq('user_id', session.user.id)
+          .order('created_at', { ascending: false });
+        setEntradas(data ?? []);
+      } catch {
+        // Error de red: mostrar cero entradas
+      } finally {
+        setCargando(false);
+      }
     }
     cargar();
   }, []);

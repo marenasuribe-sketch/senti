@@ -31,41 +31,43 @@ export default function CapsulaNewScreen() {
       return;
     }
     setGuardando(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    const userId = session?.user?.id;
-    if (!userId) {
-      setAviso({
-        titulo: 'No hay sesión activa',
-        mensaje: 'Vuelve a iniciar sesión para sellar tu cápsula.',
-        icono: 'alert-circle-outline',
-      });
-      setGuardando(false);
-      return;
-    }
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (!userId) {
+        setAviso({
+          titulo: 'No hay sesión activa',
+          mensaje: 'Vuelve a iniciar sesión para sellar tu cápsula.',
+          icono: 'alert-circle-outline',
+        });
+        return;
+      }
 
-    const perfil = await obtenerPerfil(supabase, userId);
-    const { error } = await crearCapsula(supabase, userId, texto.trim(), meses, perfil.es_premium);
-    if (error === 'LIMITE_CAPSULAS_GRATIS') {
-      setAviso({
-        titulo: 'Ya tienes una cápsula sellada',
-        mensaje: 'El plan gratuito incluye 1 cápsula activa. Con Senti+ puedes tener hasta 6 al mismo tiempo.',
-        icono: 'lock-closed', iconoBg: '#eee1cc', iconoColor: '#595141',
-        botones: [
-          { texto: 'Conocer Senti+', variante: 'primario', onPress: () => router.push('/upgrade') },
-          { texto: 'Ahora no', variante: 'secundario' },
-        ],
-      });
-      setGuardando(false);
-      return;
-    }
-    if (error) {
-      setAviso({ titulo: 'No se pudo sellar', mensaje: error, icono: 'alert-circle-outline' });
-      setGuardando(false);
-      return;
-    }
+      const perfil = await obtenerPerfil(supabase, userId);
+      const { error } = await crearCapsula(supabase, userId, texto.trim(), meses, perfil.es_premium);
+      if (error === 'LIMITE_CAPSULAS_GRATIS') {
+        setAviso({
+          titulo: 'Ya tienes una cápsula sellada',
+          mensaje: 'El plan gratuito incluye 1 cápsula activa. Con Senti+ puedes tener hasta 6 al mismo tiempo.',
+          icono: 'lock-closed', iconoBg: '#eee1cc', iconoColor: '#595141',
+          botones: [
+            { texto: 'Conocer Senti+', variante: 'primario', onPress: () => router.push('/upgrade') },
+            { texto: 'Ahora no', variante: 'secundario' },
+          ],
+        });
+        return;
+      }
+      if (error) {
+        setAviso({ titulo: 'No se pudo sellar', mensaje: error, icono: 'alert-circle-outline' });
+        return;
+      }
 
-    setGuardando(false);
-    router.replace('/(tabs)');
+      router.replace('/(tabs)');
+    } catch (e: any) {
+      setAviso({ titulo: 'Error inesperado', mensaje: e?.message ?? 'Intenta de nuevo.', icono: 'alert-circle-outline' });
+    } finally {
+      setGuardando(false);
+    }
   }
 
   return (

@@ -42,28 +42,35 @@ export default function IntakeScreen() {
   const [paso, setPaso]                 = useState(0);
   const [respuestas, setRespuestas]     = useState<string[]>([]);
   const [seleccionada, setSeleccionada] = useState<string | null>(null);
+  const [guardando, setGuardando]       = useState(false);
 
   const preguntaActual = PREGUNTAS[paso];
   const total = PREGUNTAS.length;
   const esFinal = paso === total - 1;
 
   async function handleSiguiente() {
-    if (!seleccionada) return;
+    if (!seleccionada || guardando) return;
     const nuevas = [...respuestas, seleccionada];
     if (esFinal) {
-      // Guardar en AsyncStorage para acceso offline rápido
-      await AsyncStorage.setItem('senti_intake', JSON.stringify(nuevas));
-      // Guardar en Supabase para persistencia real
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user?.id) {
-        const preguntas = PREGUNTAS.map(p => p.eyebrow.toLowerCase().replace('pregunta ', 'p'));
-        const respuestasMap = Object.fromEntries(preguntas.map((k, i) => [k, nuevas[i] ?? '']));
-        await supabase.from('perfiles').upsert(
-          { user_id: session.user.id, intake: respuestasMap },
-          { onConflict: 'user_id' }
-        );
+      setGuardando(true);
+      try {
+        await AsyncStorage.setItem('senti_intake', JSON.stringify(nuevas));
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.id) {
+          const preguntas = PREGUNTAS.map(p => p.eyebrow.toLowerCase().replace('pregunta ', 'p'));
+          const respuestasMap = Object.fromEntries(preguntas.map((k, i) => [k, nuevas[i] ?? '']));
+          await supabase.from('perfiles').upsert(
+            { user_id: session.user.id, intake: respuestasMap },
+            { onConflict: 'user_id' }
+          );
+        }
+        router.replace('/onboarding/planta');
+      } catch {
+        // Si falla el guardado, pasar igual — el intake no es bloqueante
+        router.replace('/onboarding/planta');
+      } finally {
+        setGuardando(false);
       }
-      router.replace('/onboarding/planta');
     } else {
       setRespuestas(nuevas);
       setPaso(paso + 1);
@@ -132,9 +139,9 @@ export default function IntakeScreen() {
         {/* Footer */}
         <View style={S.footer}>
           <TouchableOpacity
-            style={[S.btnSiguiente, !seleccionada && S.btnDisabled]}
+            style={[S.btnSiguiente, (!seleccionada || guardando) && S.btnDisabled]}
             onPress={handleSiguiente}
-            disabled={!seleccionada}
+            disabled={!seleccionada || guardando}
             activeOpacity={0.85}
           >
             <Text style={S.btnSiguienteText}>

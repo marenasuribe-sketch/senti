@@ -42,11 +42,13 @@ export async function crearCapsula(
   esPremium = false,
 ): Promise<{ error: string | null }> {
   const limite = esPremium ? 6 : 1;
-  const { count } = await supabase
+  const { count, error: countError } = await supabase
     .from('capsulas')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', userId)
     .eq('abierta', false);
+
+  if (countError) return { error: 'No se pudo verificar tus cápsulas. Intenta de nuevo.' };
 
   if ((count ?? 0) >= limite) {
     return {

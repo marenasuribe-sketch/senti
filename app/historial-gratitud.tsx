@@ -84,14 +84,19 @@ export default function HistorialGratitud() {
 
   useEffect(() => {
     async function iniciar() {
-      const { data: { session } } = await supabase.auth.getSession();
-      const uid = session?.user?.id;
-      if (!uid) { setCargando(false); return; }
-      setUserId(uid);
-      const perfil = await obtenerPerfil(supabase, uid);
-      setEsPremium(perfil.es_premium);
-      await cargarPagina(uid, 0, false, perfil.es_premium);
-      setCargando(false);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const uid = session?.user?.id;
+        if (!uid) { return; }
+        setUserId(uid);
+        const perfil = await obtenerPerfil(supabase, uid);
+        setEsPremium(perfil.es_premium);
+        await cargarPagina(uid, 0, false, perfil.es_premium);
+      } catch {
+        // Error de red: mostrar lista vacía
+      } finally {
+        setCargando(false);
+      }
     }
     iniciar();
   }, [cargarPagina]);
