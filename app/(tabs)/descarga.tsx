@@ -226,7 +226,7 @@ export default function DescargaScreen() {
             onClose={() => setCelebracion(null)}
           />
         )}
-        <LogroModal logro={logros[logroIdx] ?? null} onClose={cerrarLogro} />
+        <LogroModal logro={!celebracion ? (logros[logroIdx] ?? null) : null} onClose={cerrarLogro} />
         <AvisoSenti aviso={aviso} onClose={() => setAviso(null)} />
       </View>
     ) : (

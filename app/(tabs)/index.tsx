@@ -63,14 +63,17 @@ export default function HomeScreen() {
         if (!session) { if (!cancelled) setCargando(false); return; }
         const uid = session.user.id;
         if (!cancelled) setUserId(uid);
-        const { data } = await supabase
+        const { data, error: plantaError } = await supabase
           .from('plantas_usuario')
           .select('nombre, puntos, nivel')
           .eq('user_id', uid)
           .maybeSingle();
         if (cancelled) return;
-        if (data?.nombre) setPlantaId(data.nombre);
-        if (data?.puntos != null) setGotas(data.puntos);
+        // Si hay error de red, no sobrescribir estado — evita mostrar "no tienes planta"
+        if (!plantaError) {
+          if (data?.nombre) setPlantaId(data.nombre);
+          if (data?.puntos != null) setGotas(data.puntos);
+        }
 
         // Verificar cápsulas
         const [lista, activa] = await Promise.all([

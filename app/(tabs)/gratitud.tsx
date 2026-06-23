@@ -77,10 +77,12 @@ export default function GratitudScreen() {
     const { data: { session } } = await supabase.auth.getSession();
     const userId = session?.user?.id;
     if (!userId) { setCargando(false); return; }
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('gratitudes').select('*')
       .eq('user_id', userId).order('created_at', { ascending: false }).limit(100);
-    if (data) {
+    if (error) {
+      setAviso({ titulo: 'Sin conexión', mensaje: 'No se pudo cargar tu historial. Verifica tu internet.', icono: 'wifi-outline' });
+    } else if (data) {
       setTodas(data); setRacha(calcularRacha(data));
       setSemana(data.filter(e => e.created_at >= startOfWeek()));
     }
@@ -389,7 +391,7 @@ export default function GratitudScreen() {
           onClose={() => setCelebracion(null)}
         />
       )}
-      <LogroModal logro={logros[logroIdx] ?? null} onClose={cerrarLogro} />
+      <LogroModal logro={!celebracion ? (logros[logroIdx] ?? null) : null} onClose={cerrarLogro} />
       <AvisoSenti aviso={aviso} onClose={() => setAviso(null)} />
     </ScrollView>
   );

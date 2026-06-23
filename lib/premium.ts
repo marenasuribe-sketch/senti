@@ -26,12 +26,18 @@ export async function contarEntradasMes(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<number> {
-  const desde = inicioMesActual();
-  const [{ count: j }, { count: g }] = await Promise.all([
-    supabase.from('journal').select('*', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', desde),
-    supabase.from('gratitudes').select('*', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', desde),
-  ]);
-  return (j ?? 0) + (g ?? 0);
+  try {
+    const desde = inicioMesActual();
+    const [{ count: j, error: ej }, { count: g, error: eg }] = await Promise.all([
+      supabase.from('journal').select('*', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', desde),
+      supabase.from('gratitudes').select('*', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', desde),
+    ]);
+    // Si falla el conteo, bloquear por seguridad (evita bypass del límite)
+    if (ej || eg) return 9999;
+    return (j ?? 0) + (g ?? 0);
+  } catch {
+    return 9999;
+  }
 }
 
 /**
