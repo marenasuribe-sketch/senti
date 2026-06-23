@@ -39,8 +39,7 @@
       "expo-router",
       "expo-web-browser",
       "expo-font",
-      "expo-audio",
-      "react-native-purchases"
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true
