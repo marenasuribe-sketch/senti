@@ -43,14 +43,13 @@ export type Logro = {
   id: LogroId;
   nombre: string;
   mensaje: string;
-  icono: string;       // nombre de ícono de Ionicons
+  icono: string;
   categoria: 'inicio' | 'sentir' | 'constancia' | 'soltar' | 'voz' | 'planta';
 };
 
 // ─── Definición de los 18 logros ─────────────────────────────────────────────
 
 export const LOGROS: Record<LogroId, Logro> = {
-  // Hitos de inicio
   primera_gota: {
     id: 'primera_gota',
     nombre: 'Tu primera gota',
@@ -72,8 +71,6 @@ export const LOGROS: Record<LogroId, Logro> = {
     icono: 'leaf-outline',
     categoria: 'inicio',
   },
-
-  // Permitirte sentir
   nombre_tristeza: {
     id: 'nombre_tristeza',
     nombre: 'Le diste nombre a la tristeza',
@@ -102,8 +99,6 @@ export const LOGROS: Record<LogroId, Logro> = {
     icono: 'sunny-outline',
     categoria: 'sentir',
   },
-
-  // Constancia amable
   siete_dias: {
     id: 'siete_dias',
     nombre: 'Te elegiste 7 días',
@@ -132,8 +127,6 @@ export const LOGROS: Record<LogroId, Logro> = {
     icono: 'infinite-outline',
     categoria: 'constancia',
   },
-
-  // Soltar y agradecer
   guardiana_silencio: {
     id: 'guardiana_silencio',
     nombre: 'Guardiana del silencio',
@@ -155,8 +148,6 @@ export const LOGROS: Record<LogroId, Logro> = {
     icono: 'sunny-outline',
     categoria: 'soltar',
   },
-
-  // Tu voz
   tu_voz: {
     id: 'tu_voz',
     nombre: 'Tu voz contó algo',
@@ -171,8 +162,6 @@ export const LOGROS: Record<LogroId, Logro> = {
     icono: 'mic-outline',
     categoria: 'voz',
   },
-
-  // Tu planta
   primera_semilla: {
     id: 'primera_semilla',
     nombre: 'Tu primera semilla',
@@ -189,221 +178,169 @@ export const LOGROS: Record<LogroId, Logro> = {
   },
 };
 
-// ─── Tipo de acción que dispara la verificación ───────────────────────────────
+// ─── Tipo de acción ───────────────────────────────────────────────────────────
 
 export type AccionLogro = {
   tipo: 'journal' | 'gratitud' | 'descarga';
-  estres?: number;        // diario: nivel de estrés detectado por IA (0-100)
-  tresAnclajes?: boolean; // gratitud: si escribió los 3 campos
-  tags?: string[];        // descarga: tags seleccionados
-  viaAudio?: boolean;     // si la entrada fue por audio (descarga)
+  estres?: number;
+  tresAnclajes?: boolean;
+  tags?: string[];
+  viaAudio?: boolean;
 };
 
 // ─── Función principal ────────────────────────────────────────────────────────
 
 /**
  * Verifica qué logros se acaban de desbloquear tras una acción.
- * Guarda los nuevos en Supabase y los devuelve para mostrar el modal.
  *
- * Llámala después de cualquier insert en journal / gratitudes.
- * Devuelve array de logros nuevos (normalmente 0-1, rara vez 2).
+ * Optimizado para velocidad:
+ * - Queries independientes en paralelo (1 ronda de red en vez de 9 secuenciales)
+ * - Límite de 100 días para el conteo de días únicos (evita full-scan)
+ * - Queries de gratitudes comparten resultado para corazon_agradecido + buscadora_luz
+ * - Queries de historial comparten resultado para volviste + volviste_semana_dificil
+ * - Solo lanza queries para logros aún no desbloqueados
  */
 export async function verificarLogros(
   supabase: SupabaseClient,
   userId: string,
   accion: AccionLogro,
 ): Promise<Logro[]> {
-  // Logros ya desbloqueados (para no repetirlos)
+  // Primera query: logros ya desbloqueados
   const { data: yaDesbloqueados } = await supabase
     .from('logros_usuario')
     .select('logro_id')
     .eq('user_id', userId);
 
   const desbloqueados = new Set((yaDesbloqueados ?? []).map(l => l.logro_id as LogroId));
-
-  // Helper: checar si ya tiene el logro
   const tiene = (id: LogroId) => desbloqueados.has(id);
 
-  // Nuevos logros detectados en esta acción
+  // ── Logros inmediatos (sin queries extra) ─────────────────────────────────
   const nuevos: LogroId[] = [];
+  if (!tiene('primera_gota'))        nuevos.push('primera_gota');
+  if (!tiene('tres_anclajes')    && accion.tipo === 'gratitud' && accion.tresAnclajes)  nuevos.push('tres_anclajes');
+  if (!tiene('primera_descarga') && accion.tipo === 'descarga')                         nuevos.push('primera_descarga');
+  if (!tiene('nombre_tristeza')  && accion.tipo === 'journal' && (accion.estres ?? 0) > 65) nuevos.push('nombre_tristeza');
+  if (!tiene('aceptaste_no_saber') && accion.tipo === 'descarga' && accion.tags?.includes('otro')) nuevos.push('aceptaste_no_saber');
+  if (!tiene('tu_voz') && accion.viaAudio) nuevos.push('tu_voz');
 
-  // ── HITOS DE INICIO ───────────────────────────────────────────────────────
+  // ── Determinar qué queries necesitamos ───────────────────────────────────
+  const esNueva            = nuevos.includes('primera_gota');
+  const necesitaDias       = !tiene('siete_dias') || !tiene('treinta_dias') || !tiene('cien_dias');
+  const necesitaHistorial  = (!tiene('volviste') && !esNueva) || !tiene('volviste_semana_dificil');
+  const necesitaSemana     = !tiene('volviste_semana_dificil');
+  const necesitaRabia      = !tiene('rabia_informacion') && accion.tipo === 'descarga' && (accion.tags?.includes('enojo') ?? false);
+  const necesitaGuardiana  = !tiene('guardiana_silencio') && accion.tipo === 'descarga';
+  const necesitaGratitudes = accion.tipo === 'gratitud' && (!tiene('corazon_agradecido') || !tiene('buscadora_luz'));
+  const necesitaAudio      = !tiene('palabras_sin_palabras') && (accion.viaAudio ?? false);
+  const necesitaPlanta     = !tiene('primera_semilla') || !tiene('vida_completa');
 
-  // Primera gota — primera acción de cualquier tipo
-  if (!tiene('primera_gota')) {
-    nuevos.push('primera_gota');
+  // Límite de 100 días para el conteo de días únicos
+  const hace100dias = new Date();
+  hace100dias.setDate(hace100dias.getDate() - 100);
+  const hace7dias = new Date();
+  hace7dias.setDate(hace7dias.getDate() - 7);
+
+  const noop = Promise.resolve({ data: null, count: null, error: null });
+
+  // ── Todas las queries en paralelo ─────────────────────────────────────────
+  const [
+    rJournalDias,
+    rGratitudDias,
+    rHistorial,
+    rSemana,
+    rRabia,
+    rGuardiana,
+    rGratitudes,
+    rAudio,
+    rPlanta,
+  ] = await Promise.all([
+    necesitaDias
+      ? supabase.from('journal').select('created_at').eq('user_id', userId).gte('created_at', hace100dias.toISOString())
+      : noop,
+    necesitaDias
+      ? supabase.from('gratitudes').select('created_at').eq('user_id', userId).gte('created_at', hace100dias.toISOString())
+      : noop,
+    necesitaHistorial
+      ? supabase.from('journal').select('created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(10)
+      : noop,
+    necesitaSemana
+      ? supabase.from('journal').select('created_at, estres').eq('user_id', userId).gte('created_at', hace7dias.toISOString()).not('estres', 'is', null)
+      : noop,
+    necesitaRabia
+      ? supabase.from('journal').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('es_descarga', true).contains('tags', ['enojo'])
+      : noop,
+    necesitaGuardiana
+      ? supabase.from('journal').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('es_descarga', true)
+      : noop,
+    necesitaGratitudes
+      ? supabase.from('gratitudes').select('*', { count: 'exact', head: true }).eq('user_id', userId)
+      : noop,
+    necesitaAudio
+      ? supabase.from('journal').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('via_audio', true)
+      : noop,
+    necesitaPlanta
+      ? supabase.from('plantas_usuario').select('puntos').eq('user_id', userId).maybeSingle()
+      : noop,
+  ]);
+
+  // ── Procesar resultados ───────────────────────────────────────────────────
+
+  // Días únicos acumulados (últimos 100 días)
+  if (necesitaDias) {
+    const diasUnicos = new Set([
+      ...(rJournalDias.data ?? []).map((e: any) => new Date(e.created_at).toDateString()),
+      ...(rGratitudDias.data ?? []).map((e: any) => new Date(e.created_at).toDateString()),
+    ]);
+    const total = diasUnicos.size;
+    if (!tiene('siete_dias')  && total >= 7)   nuevos.push('siete_dias');
+    if (!tiene('treinta_dias') && total >= 30)  nuevos.push('treinta_dias');
+    if (!tiene('cien_dias')   && total >= 100)  nuevos.push('cien_dias');
   }
 
-  // Tres anclajes — completó las 3 gratitudes en un mismo guardado
-  if (!tiene('tres_anclajes') && accion.tipo === 'gratitud' && accion.tresAnclajes) {
-    nuevos.push('tres_anclajes');
+  // Volviste (gap de 3+ días sin entrar)
+  if (!tiene('volviste') && !esNueva && rHistorial.data && rHistorial.data.length >= 2) {
+    const penultima = new Date((rHistorial.data as any[])[1].created_at);
+    const diffDias = Math.floor((Date.now() - penultima.getTime()) / 86400000);
+    if (diffDias >= 3) nuevos.push('volviste');
   }
 
-  // Primera descarga
-  if (!tiene('primera_descarga') && accion.tipo === 'descarga') {
-    nuevos.push('primera_descarga');
-  }
-
-  // ── PERMITIRTE SENTIR ─────────────────────────────────────────────────────
-
-  // Le diste nombre a la tristeza — estrés > 65 en el diario por primera vez
-  if (!tiene('nombre_tristeza') && accion.tipo === 'journal' && (accion.estres ?? 0) > 65) {
-    nuevos.push('nombre_tristeza');
-  }
-
-  // La rabia también es información — 3 descargas con tag "enojo"
-  if (!tiene('rabia_informacion') && accion.tipo === 'descarga' && accion.tags?.includes('enojo')) {
-    const { count } = await supabase
-      .from('journal')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('es_descarga', true)
-      .contains('tags', ['enojo']);
-    if ((count ?? 0) >= 3) nuevos.push('rabia_informacion');
-  }
-
-  // Aceptaste no saber — seleccionó tag "otro" en Descarga
-  if (!tiene('aceptaste_no_saber') && accion.tipo === 'descarga' && accion.tags?.includes('otro')) {
-    nuevos.push('aceptaste_no_saber');
-  }
-
-  // Volviste de una semana difícil — semana pasada con estrés promedio > 60
-  // y la persona no había usado la app en 3+ días
-  if (!tiene('volviste_semana_dificil')) {
-    const haceUnaSemanaDias = new Date();
-    haceUnaSemanaDias.setDate(haceUnaSemanaDias.getDate() - 7);
-
-    const { data: semanaAnterior } = await supabase
-      .from('journal')
-      .select('created_at, estres')
-      .eq('user_id', userId)
-      .gte('created_at', haceUnaSemanaDias.toISOString())
-      .not('estres', 'is', null);
-
-    const entradas = semanaAnterior ?? [];
-    const promedioEstres = entradas.length >= 3
-      ? entradas.reduce((s, e) => s + (e.estres ?? 0), 0) / entradas.length
-      : 0;
-
-    if (promedioEstres > 60) {
-      // Verificar que hubo gap de 3+ días antes de esta acción
-      const { data: ultimaAntes } = await supabase
-        .from('journal')
-        .select('created_at')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(2);
-
-      const entradas2 = ultimaAntes ?? [];
-      if (entradas2.length >= 2) {
-        const penultima = new Date(entradas2[1].created_at);
-        const hoy = new Date();
-        const diffDias = Math.floor((hoy.getTime() - penultima.getTime()) / 86400000);
+  // Volviste de una semana difícil
+  if (!tiene('volviste_semana_dificil') && rSemana.data && rHistorial.data) {
+    const entradas = rSemana.data as any[];
+    if (entradas.length >= 3) {
+      const promedioEstres = entradas.reduce((s, e) => s + (e.estres ?? 0), 0) / entradas.length;
+      if (promedioEstres > 60 && (rHistorial.data as any[]).length >= 2) {
+        const penultima = new Date((rHistorial.data as any[])[1].created_at);
+        const diffDias = Math.floor((Date.now() - penultima.getTime()) / 86400000);
         if (diffDias >= 3) nuevos.push('volviste_semana_dificil');
       }
     }
   }
 
-  // ── CONSTANCIA AMABLE ─────────────────────────────────────────────────────
+  // Rabia también es información (3 descargas con tag enojo)
+  if (necesitaRabia && (rRabia.count ?? 0) >= 3) nuevos.push('rabia_informacion');
 
-  // Volviste — abrió después de 3+ días sin entrar (solo si no es nueva usuaria)
-  if (!tiene('volviste') && !nuevos.includes('primera_gota')) {
-    const { data: historial } = await supabase
-      .from('journal')
-      .select('created_at')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(2);
+  // Guardiana del silencio (10 descargas)
+  if (necesitaGuardiana && (rGuardiana.count ?? 0) >= 10) nuevos.push('guardiana_silencio');
 
-    const entradasH = historial ?? [];
-    if (entradasH.length >= 2) {
-      const penultima = new Date(entradasH[1].created_at);
-      const hoy = new Date();
-      const diffDias = Math.floor((hoy.getTime() - penultima.getTime()) / 86400000);
-      if (diffDias >= 3) nuevos.push('volviste');
-    }
+  // Corazón agradecido (30) + Buscadora de luz (100) — misma query reutilizada
+  if (necesitaGratitudes) {
+    const total = rGratitudes.count ?? 0;
+    if (!tiene('corazon_agradecido') && total >= 30)  nuevos.push('corazon_agradecido');
+    if (!tiene('buscadora_luz')      && total >= 100) nuevos.push('buscadora_luz');
   }
 
-  // Días acumulados — contar días únicos con actividad
-  if (!tiene('siete_dias') || !tiene('treinta_dias') || !tiene('cien_dias')) {
-    const [{ data: journalDias }, { data: gratitudDias }] = await Promise.all([
-      supabase.from('journal').select('created_at').eq('user_id', userId),
-      supabase.from('gratitudes').select('created_at').eq('user_id', userId),
-    ]);
+  // Palabras sin palabras (10 audios)
+  if (necesitaAudio && (rAudio.count ?? 0) >= 10) nuevos.push('palabras_sin_palabras');
 
-    const diasUnicos = new Set([
-      ...(journalDias ?? []).map(e => new Date(e.created_at).toDateString()),
-      ...(gratitudDias ?? []).map(e => new Date(e.created_at).toDateString()),
-    ]);
-    const totalDias = diasUnicos.size;
-
-    if (!tiene('siete_dias') && totalDias >= 7)    nuevos.push('siete_dias');
-    if (!tiene('treinta_dias') && totalDias >= 30)  nuevos.push('treinta_dias');
-    if (!tiene('cien_dias') && totalDias >= 100)    nuevos.push('cien_dias');
-  }
-
-  // ── SOLTAR Y AGRADECER ────────────────────────────────────────────────────
-
-  // Guardiana del silencio — 10 descargas
-  if (!tiene('guardiana_silencio') && accion.tipo === 'descarga') {
-    const { count } = await supabase
-      .from('journal')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('es_descarga', true);
-    if ((count ?? 0) >= 10) nuevos.push('guardiana_silencio');
-  }
-
-  // Corazón agradecido — 30 gratitudes
-  if (!tiene('corazon_agradecido') && accion.tipo === 'gratitud') {
-    const { count } = await supabase
-      .from('gratitudes')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId);
-    if ((count ?? 0) >= 30) nuevos.push('corazon_agradecido');
-  }
-
-  // Buscadora de luz — 100 gratitudes
-  if (!tiene('buscadora_luz') && accion.tipo === 'gratitud') {
-    const { count } = await supabase
-      .from('gratitudes')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId);
-    if ((count ?? 0) >= 100) nuevos.push('buscadora_luz');
-  }
-
-  // ── TU VOZ ───────────────────────────────────────────────────────────────
-
-  // Tu voz contó algo — primer audio
-  if (!tiene('tu_voz') && accion.viaAudio) {
-    nuevos.push('tu_voz');
-  }
-
-  // Le diste palabras a lo que no las tenía — 10 audios
-  if (!tiene('palabras_sin_palabras') && accion.viaAudio) {
-    const { count } = await supabase
-      .from('journal')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('via_audio', true);
-    if ((count ?? 0) >= 10) nuevos.push('palabras_sin_palabras');
-  }
-
-  // ── TU PLANTA ─────────────────────────────────────────────────────────────
-
-  if (!tiene('primera_semilla') || !tiene('vida_completa')) {
-    const { data: planta } = await supabase
-      .from('plantas_usuario')
-      .select('puntos')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    const gotas = planta?.puntos ?? 0;
+  // Planta
+  if (necesitaPlanta) {
+    const gotas = (rPlanta.data as any)?.puntos ?? 0;
     if (!tiene('primera_semilla') && gotas >= 20)  nuevos.push('primera_semilla');
     if (!tiene('vida_completa')   && gotas >= 200) nuevos.push('vida_completa');
   }
 
-  // ── Guardar los nuevos en Supabase ────────────────────────────────────────
+  // ── Guardar nuevos en Supabase ────────────────────────────────────────────
   if (nuevos.length > 0) {
     await supabase.from('logros_usuario').insert(
       nuevos.map(id => ({ user_id: userId, logro_id: id }))
